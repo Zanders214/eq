@@ -17,6 +17,7 @@ namespace ids
     inline constexpr const char* output = "output";   // -24..+24 dB
     inline constexpr const char* mode   = "mode";     // 0 = Stereo, 1 = Mid/Side
     inline constexpr const char* hq     = "hq";       // HQ oversampling
+    inline constexpr const char* autogain = "autogain"; // loudness-matched output trim
 
     // Per-band, suffixed with the band index, e.g. "band0_freq".
     inline juce::String band  (int i)               { return "band" + juce::String (i) + "_"; }
@@ -143,6 +144,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     layout.add (std::make_unique<AudioParameterBool> (
         ParameterID { ids::hq, 1 }, "HQ", false));
+
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { ids::autogain, 1 }, "Auto Gain", false));
 
     return layout;
 }

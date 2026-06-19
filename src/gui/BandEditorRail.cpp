@@ -138,14 +138,16 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
     L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
     L.onSolo    = top.removeFromTop (36);
 
-    auto bottom = getLocalBounds().removeFromBottom (112);
+    auto bottom = getLocalBounds().removeFromBottom (124);
     L.bottom = bottom;
     auto inner = bottom.withTrimmedTop (18);
     L.dial = inner.removeFromLeft (72);
     inner.removeFromLeft (18);
-    L.modeBtn = inner.removeFromTop (34);
-    inner.removeFromTop (8);
-    L.hqBtn = inner.removeFromTop (34);
+    L.modeBtn = inner.removeFromTop (30);
+    inner.removeFromTop (6);
+    L.hqBtn = inner.removeFromTop (30);
+    inner.removeFromTop (6);
+    L.autoBtn = inner.removeFromTop (30);
     return L;
 }
 
@@ -266,8 +268,13 @@ void BandEditorRail::paint (juce::Graphics& g)
     g.drawText ((out >= 0.0f ? "+" : "") + juce::String (out, 1) + " dB",
                 caption.withTrimmedTop (12).withHeight (14), juce::Justification::centred);
 
+    const bool ag = apvts.getRawParameterValue (ids::autogain)->load() > 0.5f;
+    juce::String autoLabel = "AUTO GAIN";
+    if (ag) autoLabel << "   " << juce::String (proc.getAutoGainTrimDb(), 1) << " dB";
+
     drawToggle (g, L.modeBtn.toFloat(), ms, ms ? "MID/SIDE" : "STEREO");
     drawToggle (g, L.hqBtn.toFloat(), hq, "HQ OVERSAMPLING");
+    drawToggle (g, L.autoBtn.toFloat(), ag, autoLabel);
 }
 
 void BandEditorRail::mouseDown (const juce::MouseEvent& e)
@@ -300,6 +307,7 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
 
     if (L.modeBtn.toFloat().contains (p)) { setChoice (ids::mode, apvts.getRawParameterValue (ids::mode)->load() > 0.5f ? 0 : 1); repaint(); return; }
     if (L.hqBtn.toFloat().contains (p))   { setBool (ids::hq, ! (apvts.getRawParameterValue (ids::hq)->load() > 0.5f)); repaint(); return; }
+    if (L.autoBtn.toFloat().contains (p)) { setBool (ids::autogain, ! (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)); repaint(); return; }
 }
 
 } // namespace zeq

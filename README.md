@@ -23,7 +23,10 @@ shipping product is the JUCE plugin under `src/`.
   behind the response curve.
 - **Draggable response curve** — drag a node for freq/gain, scroll a node for Q,
   double-click empty space to add a band, double-click a node to remove it, click to select.
-- **Output gain** (±24 dB), **Stereo / Mid-Side** processing, **HQ 2× oversampling**.
+- **Spectrum grab** — press-drag on empty analyzer space to spawn a bell snapped to the
+  nearest spectral peak and pull it in one gesture.
+- **Output gain** (±24 dB), **Stereo / Mid-Side** processing, **HQ 2× oversampling**, and
+  **Auto-gain** (loudness-matched output trim, shown live next to the toggle).
 - **A/B** compare slots and the six README presets (Flat, Vocal Air, De-Mud, Bass Tight,
   Lo-Fi, Bright).
 - All parameter changes are smoothed (no zipper noise); `processBlock` is real-time safe

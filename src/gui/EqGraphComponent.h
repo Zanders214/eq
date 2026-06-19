@@ -38,6 +38,10 @@ private:
     int  nodeAtPosition (juce::Point<float>) const;
     juce::Point<float> nodePosition (const BandView&) const;
 
+    int   spareBand() const;                 // first disabled band, or -1
+    float snapToSpectrumPeak (float x) const; // nearest analyzer peak frequency
+    int   beginSpectrumGrab (float x);        // create+select a bell at a resonance
+
     void setParam (const juce::String& id, float realValue);
     void setChoice (const juce::String& id, int index);
     void setBool (const juce::String& id, bool v);
@@ -63,6 +67,8 @@ private:
     // drag state
     int dragBand = -1;
     bool draggingGain = false;
+    bool pendingGrab = false;          // mouse is down on empty graph, may become a grab
+    juce::Point<float> grabDownPos;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EqGraphComponent)
 };

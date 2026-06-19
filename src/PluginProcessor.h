@@ -71,6 +71,7 @@ public:
     juce::AudioProcessorValueTreeState& getApvts() noexcept { return apvts; }
     AnalyzerFifo& getAnalyzerFifo() noexcept { return analyzer; }
     double getActiveSampleRate() const noexcept { return baseSampleRate; }
+    float getAutoGainTrimDb() const noexcept { return autoGainDb.load(); }
 
     // Editor/UI state that should persist but isn't host-automatable.
     int  getSelectedBand() const noexcept       { return selectedBand.load(); }
@@ -97,21 +98,24 @@ private:
 
     juce::AudioProcessorValueTreeState apvts;
     std::array<BandParams, numBands> bandParams;
-    std::atomic<float>* outputParam = nullptr;
-    std::atomic<float>* modeParam   = nullptr;
-    std::atomic<float>* hqParam      = nullptr;
+    std::atomic<float>* outputParam   = nullptr;
+    std::atomic<float>* modeParam     = nullptr;
+    std::atomic<float>* hqParam        = nullptr;
+    std::atomic<float>* autogainParam = nullptr;
 
     // DSP state
     std::array<BandDsp, numBands>                                bands;
     std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>, numBands> freqSm, qSm;
     std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>, numBands>          gainSm;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>                                outputSm;
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>                        autoGainSm;
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
 
     double baseSampleRate = 48000.0;
     double smootherRate   = 48000.0;
     bool   lastHq         = false;
+    std::atomic<float> autoGainDb { 0.0f };
 
     AnalyzerFifo analyzer;
 

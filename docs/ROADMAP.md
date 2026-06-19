@@ -39,16 +39,16 @@ selectable alongside the current minimum-phase IIR engine.
 - **UI**: a phase-mode selector in the header/rail.
 
 ## 4. Spectrum grab & EQ match
-Click-drag on the analyzer to pull a bell toward a resonance; "match" a reference curve
-by fitting bands to a captured average spectrum.
-
-- We already have FFT magnitudes per bin; add a long-term average + a peak-finder, then a
-  fitting pass that writes band params.
+✅ **Spectrum grab is implemented** — press-drag on empty analyzer space spawns a bell
+snapped to the nearest spectral peak (`EqGraphComponent::beginSpectrumGrab`), and you pull
+freq/gain in one gesture. **Still proposed: EQ match** — fit bands to a captured average
+spectrum (we already keep per-bin magnitudes; add a long-term average + a fitting pass).
 
 ## 5. Auto-gain
-Track input vs. output RMS and trim `output` so perceived loudness stays constant while
-A/B-ing EQ moves. A small detector on the existing input/output taps plus a smoothed
-trim on the output stage.
+✅ **Implemented** — input vs. post-EQ RMS drives a smoothed output trim (±12 dB clamp) so
+perceived loudness stays constant while A/B-ing EQ moves. Toggle in the rail shows the live
+trim. See `PluginProcessor::processBlock`. Possible follow-up: switch the detector from RMS
+to an LUFS/K-weighted measure.
 
 ## Smaller polish
 - Piano-key / note readout next to the frequency value.

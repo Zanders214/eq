@@ -61,6 +61,49 @@ juce::Point<float> EqGraphComponent::nodePosition (const BandView& b) const
     return { x, y };
 }
 
+int EqGraphComponent::spareBand() const
+{
+    for (int i = 0; i < numBands; ++i)
+        if (apvts.getRawParameterValue (ids::on (i))->load() <= 0.5f)
+            return i;
+    return -1;
+}
+
+// Snap a frequency to the strongest analyzer bin within ~1/6-octave of the cursor.
+float EqGraphComponent::snapToSpectrumPeak (float x) const
+{
+    const float w = (float) getWidth();
+    const float centreFrac = juce::jlimit (0.0f, 1.0f, x / w);
+    const int   centre = juce::roundToInt (centreFrac * (numPoints - 1));
+    const int   span = juce::jmax (3, numPoints / 36);  // ~1/6 octave window
+
+    int bestIdx = centre;
+    float bestLvl = -1.0f;
+    for (int i = juce::jmax (0, centre - span); i <= juce::jmin (numPoints - 1, centre + span); ++i)
+        if (scope[(size_t) i] > bestLvl) { bestLvl = scope[(size_t) i]; bestIdx = i; }
+
+    // Only snap if there's a meaningful peak; otherwise use the cursor frequency.
+    const float frac = (bestLvl > 0.04f) ? (float) bestIdx / (numPoints - 1) : centreFrac;
+    return juce::jlimit (fMin, fMax, fMin * std::exp (frac * logSpan));
+}
+
+int EqGraphComponent::beginSpectrumGrab (float x)
+{
+    const int b = spareBand();
+    if (b < 0)
+        return -1;
+
+    const float f = snapToSpectrumPeak (x);
+    setChoice (ids::type (b), (int) FilterType::bell);
+    setParam (ids::freq (b), f);
+    setParam (ids::gain (b), 0.0f);
+    setParam (ids::q (b), 1.4f);
+    setBool (ids::on (b), true);
+    proc.setSelectedBand (b);
+    if (onSelectionChanged) onSelectionChanged();
+    return b;
+}
+
 int EqGraphComponent::nodeAtPosition (juce::Point<float> p) const
 {
     int best = -1;
@@ -271,13 +314,30 @@ void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
     else
     {
         dragBand = -1;
+        pendingGrab = true;          // may turn into a spectrum grab if dragged
+        grabDownPos = e.position;
     }
 }
 
 void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 {
-    if (dragBand < 0) return;
     const float w = (float) getWidth(), h = (float) getHeight();
+
+    // Promote a press-on-empty into a spectrum grab once the user actually drags.
+    if (dragBand < 0 && pendingGrab && e.position.getDistanceFrom (grabDownPos) > 4.0f)
+    {
+        const int b = beginSpectrumGrab (grabDownPos.x);
+        pendingGrab = false;
+        if (b >= 0)
+        {
+            dragBand = b;
+            draggingGain = true;
+            beginGesture (ids::freq (b));
+            beginGesture (ids::gain (b));
+        }
+    }
+
+    if (dragBand < 0) return;
     const float x = juce::jlimit (0.0f, w, e.position.x);
     const float y = juce::jlimit (0.0f, h, e.position.y);
     setParam (ids::freq (dragBand), juce::jlimit (fMin, fMax, xToFreq (x, w)));
@@ -287,6 +347,7 @@ void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 
 void EqGraphComponent::mouseUp (const juce::MouseEvent&)
 {
+    pendingGrab = false;
     if (dragBand < 0) return;
     endGesture (ids::freq (dragBand));
     if (draggingGain) endGesture (ids::gain (dragBand));

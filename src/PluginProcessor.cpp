@@ -16,7 +16,7 @@ namespace
             fn (ids::q (i));     fn (ids::slope (i)); fn (ids::on (i));
             fn (ids::solo (i));
         }
-        fn (ids::output); fn (ids::mode); fn (ids::hq);
+        fn (ids::output); fn (ids::mode); fn (ids::hq); fn (ids::autogain);
     }
 }
 
@@ -36,9 +36,10 @@ ZandersEqAudioProcessor::ZandersEqAudioProcessor()
         bandParams[(size_t) i].on    = apvts.getRawParameterValue (ids::on (i));
         bandParams[(size_t) i].solo  = apvts.getRawParameterValue (ids::solo (i));
     }
-    outputParam = apvts.getRawParameterValue (ids::output);
-    modeParam   = apvts.getRawParameterValue (ids::mode);
-    hqParam     = apvts.getRawParameterValue (ids::hq);
+    outputParam   = apvts.getRawParameterValue (ids::output);
+    modeParam     = apvts.getRawParameterValue (ids::mode);
+    hqParam       = apvts.getRawParameterValue (ids::hq);
+    autogainParam = apvts.getRawParameterValue (ids::autogain);
 }
 
 void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
@@ -64,8 +65,10 @@ void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
         bands[(size_t) i].reset();
         bands[(size_t) i].active = false;
     }
-    outputSm.reset (smootherRate, ramp);
+    outputSm.reset (baseSampleRate, ramp);
     outputSm.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
+    autoGainSm.reset (baseSampleRate, 0.08);   // slower ramp so the trim doesn't pump
+    autoGainSm.setCurrentAndTargetValue (1.0f);
 
     lastHq = hqParam->load() > 0.5f;
     setLatencySamples (lastHq ? (int) std::round (oversampler->getLatencyInSamples()) : 0);
@@ -105,8 +108,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
             gainSm[(size_t) i].reset (procRate, ramp);
             qSm  [(size_t) i].reset (procRate, ramp);
         }
-        outputSm.reset (procRate, ramp);
-        smootherRate = procRate;
+        smootherRate = procRate;   // output/auto-gain stay at base rate (applied post-downsample)
     }
 
     for (int i = 0; i < numBands; ++i)
@@ -117,6 +119,21 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     }
     outputSm.setTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
 
+    const int nSamples = buffer.getNumSamples();
+    const int nCh      = juce::jmax (1, buffer.getNumChannels());
+
+    // Input level (pre-EQ), for auto-gain loudness matching.
+    const bool autogain = autogainParam->load() > 0.5f;
+    double inSumSq = 0.0;
+    if (autogain)
+        for (int c = 0; c < buffer.getNumChannels(); ++c)
+        {
+            const float* d = buffer.getReadPointer (c);
+            for (int s = 0; s < nSamples; ++s)
+                inSumSq += (double) d[s] * d[s];
+        }
+
+    // Filtering only (no gain) — at base rate or 2x inside the oversampler.
     if (hq)
     {
         juce::dsp::AudioBlock<float> block (buffer);
@@ -134,15 +151,43 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
                    buffer.getNumSamples(), procRate);
     }
 
+    // Auto-gain: trim so post-EQ loudness matches the input (clamped to +-12 dB).
+    if (autogain)
+    {
+        double outSumSq = 0.0;
+        for (int c = 0; c < buffer.getNumChannels(); ++c)
+        {
+            const float* d = buffer.getReadPointer (c);
+            for (int s = 0; s < nSamples; ++s)
+                outSumSq += (double) d[s] * d[s];
+        }
+        if (outSumSq > 1.0e-9 && inSumSq > 1.0e-9)
+        {
+            const float trim = juce::jlimit (0.25f, 4.0f, (float) std::sqrt (inSumSq / outSumSq));
+            autoGainSm.setTargetValue (trim);
+        }
+    }
+    else
+    {
+        autoGainSm.setTargetValue (1.0f);
+    }
+
+    // Output stage: user gain x auto-gain trim, per-sample (click-free), base rate.
+    for (int s = 0; s < nSamples; ++s)
+    {
+        const float g = outputSm.getNextValue() * autoGainSm.getNextValue();
+        for (int c = 0; c < nCh; ++c)
+            buffer.getWritePointer (c)[s] *= g;
+    }
+    autoGainDb.store (juce::Decibels::gainToDecibels (autoGainSm.getCurrentValue()));
+
     // Feed the analyzer with the post-EQ (output) signal, summed to mono.
-    const int n  = buffer.getNumSamples();
-    const int ch = juce::jmax (1, buffer.getNumChannels());
-    for (int s = 0; s < n; ++s)
+    for (int s = 0; s < nSamples; ++s)
     {
         float m = 0.0f;
-        for (int c = 0; c < ch; ++c)
+        for (int c = 0; c < nCh; ++c)
             m += buffer.getSample (c, s);
-        analyzer.push (m / (float) ch);
+        analyzer.push (m / (float) nCh);
     }
 }
 
@@ -197,16 +242,14 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
                         mid  = bands[(size_t) i].processSample (0, mid);
                         side = bands[(size_t) i].processSample (1, side);
                     }
-                const float gain = outputSm.getNextValue();
-                L[s] = (mid + side) * gain;
-                R[s] = (mid - side) * gain;
+                L[s] = mid + side;
+                R[s] = mid - side;
             }
         }
         else
         {
             for (int s = pos; s < pos + len; ++s)
             {
-                const float gain = outputSm.getNextValue();
                 for (int c = 0; c < numChannels; ++c)
                 {
                     const int stateCh = juce::jmin (c, 1);
@@ -214,7 +257,7 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
                     for (int i = 0; i < numBands; ++i)
                         if (bands[(size_t) i].active)
                             x = bands[(size_t) i].processSample (stateCh, x);
-                    channels[c][s] = x * gain;
+                    channels[c][s] = x;
                 }
             }
         }

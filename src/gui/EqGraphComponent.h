@@ -28,6 +28,10 @@ public:
     // Driven by the editor's timer: pull a new FFT frame and advance the spectrum.
     void updateAnimation();
 
+    // EQ match
+    void toggleCapture();   // start/stop capturing reference (sidechain) + source (main)
+    void runMatch();        // fit the bands to the captured difference
+
     std::function<void()> onSelectionChanged;
 
 private:
@@ -53,6 +57,10 @@ private:
     void drawCurve (juce::Graphics&);
     void drawNodes (juce::Graphics&);
 
+    // EQ-match capture helpers
+    void accumulateTap (AnalyzerFifo&, std::array<double, kMatchBins>&, int& frames);
+    void finishCapture();
+
     ZandersEqAudioProcessor& proc;
     juce::AudioProcessorValueTreeState& apvts;
 
@@ -63,6 +71,10 @@ private:
     static constexpr int numPoints = 240;
     std::array<float, numPoints> scope {};
     std::array<float, numPoints> peaks {};
+
+    // EQ-match capture accumulators (message-thread only; raw power per log bin)
+    std::array<double, kMatchBins> accumSrc {}, accumRef {};
+    int capFramesSrc = 0, capFramesRef = 0;
 
     // drag state
     int dragBand = -1;

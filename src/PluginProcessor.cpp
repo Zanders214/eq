@@ -1,6 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-
+#include <cstring>
 namespace zeq
 {
 
@@ -16,14 +16,15 @@ namespace
             fn (ids::q (i));     fn (ids::slope (i)); fn (ids::on (i));
             fn (ids::solo (i));
         }
-        fn (ids::output); fn (ids::mode); fn (ids::hq); fn (ids::autogain);
+        fn (ids::output); fn (ids::mode); fn (ids::hq); fn (ids::autogain); fn (ids::matchamount);
     }
 }
 
 ZandersEqAudioProcessor::ZandersEqAudioProcessor()
     : AudioProcessor (BusesProperties()
-          .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+          .withInput  ("Input",     juce::AudioChannelSet::stereo(), true)
+          .withOutput ("Output",    juce::AudioChannelSet::stereo(), true)
+          .withInput  ("Sidechain", juce::AudioChannelSet::stereo(), false)),
       apvts (*this, nullptr, "PARAMS", makeLayout())
 {
     for (int i = 0; i < numBands; ++i)
@@ -79,17 +80,52 @@ bool ZandersEqAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts
     const auto out = layouts.getMainOutputChannelSet();
     if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo())
         return false;
-    return layouts.getMainInputChannelSet() == out;
+    if (layouts.getMainInputChannelSet() != out)
+        return false;
+
+    // Optional sidechain (input bus 1) — allow disabled, mono or stereo.
+    if (layouts.inputBuses.size() > 1)
+    {
+        const auto sc = layouts.getChannelSet (true, 1);
+        if (! sc.isDisabled()
+            && sc != juce::AudioChannelSet::mono()
+            && sc != juce::AudioChannelSet::stereo())
+            return false;
+    }
+    return true;
 }
 
 void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    const int totalIn  = getTotalNumInputChannels();
-    const int totalOut = getTotalNumOutputChannels();
-    for (int ch = totalIn; ch < totalOut; ++ch)
-        buffer.clear (ch, 0, buffer.getNumSamples());
+    auto mainBus = getBusBuffer (buffer, true, 0);   // main in/out, processed in place
+    const int nSamples = mainBus.getNumSamples();
+    const int nCh      = juce::jmax (1, mainBus.getNumChannels());
+
+    // EQ-match capture: source from the main bus (pre-EQ), reference from the sidechain.
+    const bool scEnabled = getBus (true, 1) != nullptr && getBus (true, 1)->isEnabled();
+    sidechainOn.store (scEnabled);
+    if (capturing.load (std::memory_order_relaxed))
+    {
+        for (int s = 0; s < nSamples; ++s)
+        {
+            float m = 0.0f;
+            for (int c = 0; c < mainBus.getNumChannels(); ++c) m += mainBus.getSample (c, s);
+            captureSrc.push (m / (float) nCh);
+        }
+        if (scEnabled)
+        {
+            auto scBus = getBusBuffer (buffer, true, 1);
+            const int scCh = juce::jmax (1, scBus.getNumChannels());
+            for (int s = 0; s < nSamples; ++s)
+            {
+                float m = 0.0f;
+                for (int c = 0; c < scBus.getNumChannels(); ++c) m += scBus.getSample (c, s);
+                captureRef.push (m / (float) scCh);
+            }
+        }
+    }
 
     const bool hq = hqParam->load() > 0.5f;
     const double procRate = baseSampleRate * (hq ? 2.0 : 1.0);
@@ -119,16 +155,13 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     }
     outputSm.setTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
 
-    const int nSamples = buffer.getNumSamples();
-    const int nCh      = juce::jmax (1, buffer.getNumChannels());
-
     // Input level (pre-EQ), for auto-gain loudness matching.
     const bool autogain = autogainParam->load() > 0.5f;
     double inSumSq = 0.0;
     if (autogain)
-        for (int c = 0; c < buffer.getNumChannels(); ++c)
+        for (int c = 0; c < mainBus.getNumChannels(); ++c)
         {
-            const float* d = buffer.getReadPointer (c);
+            const float* d = mainBus.getReadPointer (c);
             for (int s = 0; s < nSamples; ++s)
                 inSumSq += (double) d[s] * d[s];
         }
@@ -136,7 +169,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     // Filtering only (no gain) — at base rate or 2x inside the oversampler.
     if (hq)
     {
-        juce::dsp::AudioBlock<float> block (buffer);
+        juce::dsp::AudioBlock<float> block (mainBus);
         auto up = oversampler->processSamplesUp (block);
         std::array<float*, 2> chans { nullptr, nullptr };
         const int n = (int) juce::jmin<size_t> (2, up.getNumChannels());
@@ -147,17 +180,16 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     }
     else
     {
-        processEq (buffer.getArrayOfWritePointers(), buffer.getNumChannels(),
-                   buffer.getNumSamples(), procRate);
+        processEq (mainBus.getArrayOfWritePointers(), mainBus.getNumChannels(), nSamples, procRate);
     }
 
     // Auto-gain: trim so post-EQ loudness matches the input (clamped to +-12 dB).
     if (autogain)
     {
         double outSumSq = 0.0;
-        for (int c = 0; c < buffer.getNumChannels(); ++c)
+        for (int c = 0; c < mainBus.getNumChannels(); ++c)
         {
-            const float* d = buffer.getReadPointer (c);
+            const float* d = mainBus.getReadPointer (c);
             for (int s = 0; s < nSamples; ++s)
                 outSumSq += (double) d[s] * d[s];
         }
@@ -177,7 +209,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     {
         const float g = outputSm.getNextValue() * autoGainSm.getNextValue();
         for (int c = 0; c < nCh; ++c)
-            buffer.getWritePointer (c)[s] *= g;
+            mainBus.getWritePointer (c)[s] *= g;
     }
     autoGainDb.store (juce::Decibels::gainToDecibels (autoGainSm.getCurrentValue()));
 
@@ -186,7 +218,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     {
         float m = 0.0f;
         for (int c = 0; c < nCh; ++c)
-            m += buffer.getSample (c, s);
+            m += mainBus.getSample (c, s);
         analyzer.push (m / (float) nCh);
     }
 }
@@ -293,6 +325,22 @@ void ZandersEqAudioProcessor::toggleABSlot (const juce::String& slot)
     abSlot = slot;
 }
 
+void ZandersEqAudioProcessor::storeCaptureCurve (CaptureSlot s, const float* power, int n)
+{
+    auto& dst = (s == CaptureSlot::source) ? srcCurve : refCurve;
+    const int count = juce::jmin (n, kMatchBins);
+    std::fill (dst.begin(), dst.end(), 0.0f);
+    std::copy (power, power + count, dst.begin());
+    (s == CaptureSlot::source ? hasSrc : hasRef) = true;
+}
+
+void ZandersEqAudioProcessor::clearCaptureCurves()
+{
+    refCurve.fill (0.0f);
+    srcCurve.fill (0.0f);
+    hasRef = hasSrc = false;
+}
+
 void ZandersEqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
@@ -300,6 +348,12 @@ void ZandersEqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty ("abSlot", abSlot, nullptr);
     state.removeChild (state.getChildWithName ("ABOther"), nullptr);
     state.appendChild (abStored.createCopy(), nullptr);
+
+    // EQ-match captured curves (raw float power per bin) as binary blobs.
+    if (hasRef)
+        state.setProperty ("refCurve", juce::MemoryBlock (refCurve.data(), sizeof (refCurve)), nullptr);
+    if (hasSrc)
+        state.setProperty ("srcCurve", juce::MemoryBlock (srcCurve.data(), sizeof (srcCurve)), nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -320,6 +374,20 @@ void ZandersEqAudioProcessor::setStateInformation (const void* data, int sizeInB
 
     auto stored = tree.getChildWithName ("ABOther");
     abStored = stored.isValid() ? stored.createCopy() : juce::ValueTree ("ABOther");
+
+    // Restore EQ-match curves if present and the right size.
+    clearCaptureCurves();
+    auto loadCurve = [&] (const char* prop, std::array<float, kMatchBins>& dst, bool& flag)
+    {
+        if (auto* mb = tree.getProperty (prop).getBinaryData())
+            if (mb->getSize() == sizeof (dst))
+            {
+                std::memcpy (dst.data(), mb->getData(), sizeof (dst));
+                flag = true;
+            }
+    };
+    loadCurve ("refCurve", refCurve, hasRef);
+    loadCurve ("srcCurve", srcCurve, hasSrc);
 
     apvts.replaceState (tree);
 }

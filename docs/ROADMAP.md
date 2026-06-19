@@ -39,10 +39,13 @@ selectable alongside the current minimum-phase IIR engine.
 - **UI**: a phase-mode selector in the header/rail.
 
 ## 4. Spectrum grab & EQ match
-✅ **Spectrum grab is implemented** — press-drag on empty analyzer space spawns a bell
-snapped to the nearest spectral peak (`EqGraphComponent::beginSpectrumGrab`), and you pull
-freq/gain in one gesture. **Still proposed: EQ match** — fit bands to a captured average
-spectrum (we already keep per-bin magnitudes; add a long-term average + a fitting pass).
+✅ **Both implemented.** *Spectrum grab*: press-drag on empty analyzer space spawns a bell
+snapped to the nearest spectral peak (`EqGraphComponent::beginSpectrumGrab`). *EQ match*:
+capture a reference (sidechain) and the source simultaneously (pre-EQ taps), average their
+power spectra, and fit the 6 bands to the de-meaned difference via greedy peak-picking +
+weighted least-squares (`src/dsp/MatchFit.h`, unit-tested in `tests/MatchFitTests.cpp`). A
+Match Amount slider scales the correction and a ghost curve shows the target. Possible
+follow-ups: load a reference from an audio file, and an LUFS/K-weighted detector.
 
 ## 5. Auto-gain
 ✅ **Implemented** — input vs. post-EQ RMS drives a smoothed output trim (±12 dB clamp) so

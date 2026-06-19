@@ -236,6 +236,25 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
     g.setColour (text1.withAlpha (0.06f));
     g.fillPath (fill);
 
+    // EQ-match ghost: the target (reference - source) difference curve
+    if (proc.hasMatchData())
+    {
+        std::array<float, kMatchBins> tgt {};
+        computeTargetDb (proc.getReferenceCurve(), proc.getSourceCurve(), kMatchBins, tgt.data());
+        juce::Path ghost;
+        for (int k = 0; k < kMatchBins; ++k)
+        {
+            const float gx = (float) k / (kMatchBins - 1) * w;
+            const float gy = juce::jlimit (-2.0f, h + 2.0f, gainToY (tgt[(size_t) k], h));
+            if (k == 0) ghost.startNewSubPath (gx, gy); else ghost.lineTo (gx, gy);
+        }
+        const float gdash[] = { 4.0f, 4.0f };
+        juce::Path gdashed;
+        juce::PathStrokeType (1.4f).createDashedStroke (gdashed, ghost, gdash, 2);
+        g.setColour (accentVio.withAlpha (0.55f));
+        g.fillPath (gdashed);
+    }
+
     // selected band's individual (dashed) curve
     const int sel = proc.getSelectedBand();
     if (sel >= 0 && sel < numBands)
@@ -428,6 +447,110 @@ void EqGraphComponent::updateAnimation()
     {
         for (int p = 0; p < numPoints; ++p)
             peaks[(size_t) p] = juce::jmax (scope[(size_t) p], peaks[(size_t) p] - 0.004f);
+    }
+
+    if (proc.isCapturing())
+    {
+        accumulateTap (proc.getCaptureFifo (ZandersEqAudioProcessor::CaptureSlot::source), accumSrc, capFramesSrc);
+        if (proc.sidechainActive())
+            accumulateTap (proc.getCaptureFifo (ZandersEqAudioProcessor::CaptureSlot::reference), accumRef, capFramesRef);
+    }
+}
+
+// Consume one capture FFT frame and accumulate RAW power per match bin (no tilt).
+void EqGraphComponent::accumulateTap (AnalyzerFifo& f, std::array<double, kMatchBins>& accum, int& frames)
+{
+    if (! f.blockReady.load (std::memory_order_acquire))
+        return;
+
+    window.multiplyWithWindowingTable (f.fftData.data(), (size_t) AnalyzerFifo::fftSize);
+    fft.performFrequencyOnlyForwardTransform (f.fftData.data());
+
+    const double sr = proc.getActiveSampleRate();
+    const int half = AnalyzerFifo::fftSize / 2;
+    for (int k = 0; k < kMatchBins; ++k)
+    {
+        const double freq = matchBinFreq (k, kMatchBins);
+        const float bin = (float) (freq * AnalyzerFifo::fftSize / sr);
+        const int i0 = juce::jlimit (0, half - 2, (int) bin);
+        const float frac = juce::jlimit (0.0f, 1.0f, bin - (float) i0);
+        const float mag = juce::jmap (frac, f.fftData[(size_t) i0], f.fftData[(size_t) i0 + 1]);
+        const double magNorm = (double) mag / ((double) AnalyzerFifo::fftSize * 0.5);
+        accum[(size_t) k] += magNorm * magNorm;
+    }
+    ++frames;
+    f.blockReady.store (false, std::memory_order_release);
+}
+
+void EqGraphComponent::toggleCapture()
+{
+    if (proc.isCapturing())
+    {
+        finishCapture();
+    }
+    else
+    {
+        accumSrc.fill (0.0); accumRef.fill (0.0);
+        capFramesSrc = capFramesRef = 0;
+        proc.setCapturing (true);
+    }
+}
+
+void EqGraphComponent::finishCapture()
+{
+    proc.setCapturing (false);
+
+    std::array<float, kMatchBins> mean {};
+    if (capFramesSrc > 0)
+    {
+        for (int k = 0; k < kMatchBins; ++k) mean[(size_t) k] = (float) (accumSrc[(size_t) k] / capFramesSrc);
+        proc.storeCaptureCurve (ZandersEqAudioProcessor::CaptureSlot::source, mean.data(), kMatchBins);
+    }
+    if (capFramesRef > 0)
+    {
+        double energy = 0.0;
+        for (int k = 0; k < kMatchBins; ++k) { mean[(size_t) k] = (float) (accumRef[(size_t) k] / capFramesRef); energy += mean[(size_t) k]; }
+        if (energy > 1.0e-9)   // only store a reference that actually carried signal
+            proc.storeCaptureCurve (ZandersEqAudioProcessor::CaptureSlot::reference, mean.data(), kMatchBins);
+    }
+}
+
+void EqGraphComponent::runMatch()
+{
+    if (! proc.hasMatchData())
+        return;
+
+    const float amount = apvts.getRawParameterValue (ids::matchamount)->load() / 100.0f;
+    const auto res = fitMatch (proc.getReferenceCurve(), proc.getSourceCurve(),
+                               kMatchBins, proc.getActiveSampleRate(), amount);
+
+    int firstUsed = -1;
+    for (int i = 0; i < numBands; ++i)
+    {
+        const auto& b = res.bands[(size_t) i];
+        beginGesture (ids::type (i)); beginGesture (ids::freq (i)); beginGesture (ids::gain (i));
+        beginGesture (ids::q (i));    beginGesture (ids::slope (i)); beginGesture (ids::on (i));
+
+        setChoice (ids::type (i), (int) b.type);
+        if (b.on)
+        {
+            setParam (ids::freq (i), b.freq);
+            setParam (ids::gain (i), b.gain);
+            setParam (ids::q (i), b.q);
+            setChoice (ids::slope (i), slopeValueToIndex (b.slope));
+            if (firstUsed < 0) firstUsed = i;
+        }
+        setBool (ids::on (i), b.on);
+        setBool (ids::solo (i), false);
+
+        endGesture (ids::type (i)); endGesture (ids::freq (i)); endGesture (ids::gain (i));
+        endGesture (ids::q (i));    endGesture (ids::slope (i)); endGesture (ids::on (i));
+    }
+
+    if (firstUsed >= 0)
+    {
+        proc.setSelectedBand (firstUsed);
+        if (onSelectionChanged) onSelectionChanged();
     }
 }
 

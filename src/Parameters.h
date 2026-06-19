@@ -6,10 +6,7 @@
 namespace zeq
 {
 
-// Fixed pool of bands. Six matches the design's default set, the six-cell band
-// strip and the six spectrum colours. Bump this constant to expand the EQ — the
-// strip, nodes and parameter layout are all driven from it.
-inline constexpr int numBands = 6;
+// numBands is defined in dsp/EqMath.h (shared with non-JUCE code like MatchFit).
 
 namespace ids
 {
@@ -18,6 +15,7 @@ namespace ids
     inline constexpr const char* mode   = "mode";     // 0 = Stereo, 1 = Mid/Side
     inline constexpr const char* hq     = "hq";       // HQ oversampling
     inline constexpr const char* autogain = "autogain"; // loudness-matched output trim
+    inline constexpr const char* matchamount = "matchamount"; // EQ-match strength 0..100%
 
     // Per-band, suffixed with the band index, e.g. "band0_freq".
     inline juce::String band  (int i)               { return "band" + juce::String (i) + "_"; }
@@ -147,6 +145,11 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     layout.add (std::make_unique<AudioParameterBool> (
         ParameterID { ids::autogain, 1 }, "Auto Gain", false));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { ids::matchamount, 1 }, "Match Amount",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f,
+        AudioParameterFloatAttributes().withLabel ("%")));
 
     return layout;
 }

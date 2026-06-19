@@ -80,6 +80,9 @@ BandEditorRail::BandEditorRail (ZandersEqAudioProcessor& p)
     addAndMakeVisible (outputDial);
     outAtt = std::make_unique<Attachment> (apvts, ids::output, outputDial);
 
+    setupSlider (matchAmountSlider, "accent");
+    matchAmtAtt = std::make_unique<Attachment> (apvts, ids::matchamount, matchAmountSlider);
+
     bindToSelected();
 }
 
@@ -138,6 +141,18 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
     L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
     L.onSolo    = top.removeFromTop (36);
 
+    // EQ-match panel fills the gap between on/solo and the bottom dial/toggle block.
+    auto matchArea = top;
+    matchArea.removeFromBottom (124 + 14);
+    matchArea.removeFromTop (20);
+    L.matchLabel  = matchArea.removeFromTop (16);
+    matchArea.removeFromTop (6);
+    L.matchAmtRow = matchArea.removeFromTop (38);
+    matchArea.removeFromTop (8);
+    L.matchBtnRow = matchArea.removeFromTop (34);
+    L.captureBtn  = L.matchBtnRow.withWidth (L.matchBtnRow.getWidth() / 2 - 3);
+    L.matchBtn    = L.matchBtnRow.withTrimmedLeft (L.matchBtnRow.getWidth() / 2 + 3);
+
     auto bottom = getLocalBounds().removeFromBottom (124);
     L.bottom = bottom;
     auto inner = bottom.withTrimmedTop (18);
@@ -164,6 +179,7 @@ void BandEditorRail::resized()
     gainSlider.setBounds (L.gainBlock.withTrimmedTop (24));
     qSlider.setBounds    (L.qBlock.withTrimmedTop (24));
     outputDial.setBounds (L.dial.removeFromTop (60));
+    matchAmountSlider.setBounds (L.matchAmtRow.withTrimmedTop (20));
 }
 
 void BandEditorRail::paint (juce::Graphics& g)
@@ -254,6 +270,40 @@ void BandEditorRail::paint (juce::Graphics& g)
         g.drawText ("SOLO", soloBtn, juce::Justification::centred);
     }
 
+    // EQ-match panel
+    {
+        auto label = L.matchLabel;
+        g.setColour (textLabel);
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+        g.drawText ("EQ MATCH", label, juce::Justification::centredLeft);
+
+        auto srcChip = juce::Rectangle<float> ((float) label.getRight() - 78.0f, (float) label.getY(), 36.0f, 16.0f);
+        auto refChip = juce::Rectangle<float> ((float) label.getRight() - 38.0f, (float) label.getY(), 36.0f, 16.0f);
+        drawChip (g, srcChip, proc.hasSource(),    "SRC", 8.5f, 0.06f);
+        drawChip (g, refChip, proc.hasReference(), "REF", 8.5f, 0.06f);
+
+        g.setColour (textLabel);
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+        g.drawText ("MATCH AMOUNT", L.matchAmtRow.withHeight (14), juce::Justification::centredLeft);
+        g.setColour (text2);
+        g.setFont (Fonts::mono (12.0f, true));
+        g.drawText (juce::String (juce::roundToInt (apvts.getRawParameterValue (ids::matchamount)->load())) + " %",
+                    L.matchAmtRow.withHeight (14), juce::Justification::centredRight);
+
+        const bool capturing = proc.isCapturing();
+        drawToggle (g, L.captureBtn.toFloat(), capturing, capturing ? "CAPTURING" : "CAPTURE");
+
+        auto mb = L.matchBtn.toFloat();
+        const bool canMatch = proc.hasMatchData();
+        g.setColour (canMatch ? accentVio.withAlpha (0.16f) : whiteAlpha (0.05f));
+        g.fillRoundedRectangle (mb, 8.0f);
+        g.setColour (canMatch ? accentVio.withAlpha (0.45f) : whiteAlpha (0.08f));
+        g.drawRoundedRectangle (mb.reduced (0.5f), 8.0f, 1.0f);
+        g.setColour (canMatch ? juce::Colour (0xffb6abff) : text3.withAlpha (0.5f));
+        g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
+        g.drawText ("MATCH", mb, juce::Justification::centred);
+    }
+
     // bottom: divider, output dial caption/value, mode + hq
     g.setColour (whiteAlpha (0.08f));
     g.drawHorizontalLine (L.bottom.getY(), 0.0f, (float) getWidth());
@@ -308,6 +358,9 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
     if (L.modeBtn.toFloat().contains (p)) { setChoice (ids::mode, apvts.getRawParameterValue (ids::mode)->load() > 0.5f ? 0 : 1); repaint(); return; }
     if (L.hqBtn.toFloat().contains (p))   { setBool (ids::hq, ! (apvts.getRawParameterValue (ids::hq)->load() > 0.5f)); repaint(); return; }
     if (L.autoBtn.toFloat().contains (p)) { setBool (ids::autogain, ! (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)); repaint(); return; }
+
+    if (L.captureBtn.toFloat().contains (p)) { if (onCapture) onCapture(); repaint(); return; }
+    if (L.matchBtn.toFloat().contains (p) && proc.hasMatchData()) { if (onMatch) onMatch(); repaint(); return; }
 }
 
 } // namespace zeq

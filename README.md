@@ -27,6 +27,10 @@ shipping product is the JUCE plugin under `src/`.
   nearest spectral peak and pull it in one gesture.
 - **Output gain** (±24 dB), **Stereo / Mid-Side** processing, **HQ 2× oversampling**, and
   **Auto-gain** (loudness-matched output trim, shown live next to the toggle).
+- **EQ match** — capture a reference (sidechain input) and the source simultaneously, then
+  fit the 6 bands to their tonal-balance difference (greedy peak-pick + weighted
+  least-squares), with a Match Amount control and a ghost target curve. Result stays fully
+  editable. Fitter is unit-tested (`-DZEQ_BUILD_TESTS=ON`).
 - **A/B** compare slots and the six README presets (Flat, Vocal Air, De-Mud, Bass Tight,
   Lo-Fi, Bright).
 - All parameter changes are smoothed (no zipper noise); `processBlock` is real-time safe

@@ -5,6 +5,7 @@
 
 #include "Parameters.h"
 #include "dsp/Biquad.h"
+#include "dsp/MatchFit.h"
 
 namespace zeq
 {
@@ -73,6 +74,21 @@ public:
     double getActiveSampleRate() const noexcept { return baseSampleRate; }
     float getAutoGainTrimDb() const noexcept { return autoGainDb.load(); }
 
+    // --- EQ match (capture taps live-fed pre-EQ / sidechain; curves are
+    //     message-thread state, never touched by the audio thread) ----------
+    enum class CaptureSlot { source, reference };
+    AnalyzerFifo& getCaptureFifo (CaptureSlot s) noexcept { return s == CaptureSlot::source ? captureSrc : captureRef; }
+    bool isCapturing() const noexcept { return capturing.load(); }
+    void setCapturing (bool b) noexcept { capturing.store (b); }
+    bool sidechainActive() const noexcept { return sidechainOn.load(); }
+    void storeCaptureCurve (CaptureSlot s, const float* power, int n);
+    void clearCaptureCurves();
+    bool hasReference() const noexcept { return hasRef; }
+    bool hasSource()    const noexcept { return hasSrc; }
+    bool hasMatchData() const noexcept { return hasRef && hasSrc; }
+    const float* getReferenceCurve() const noexcept { return refCurve.data(); }
+    const float* getSourceCurve()    const noexcept { return srcCurve.data(); }
+
     // Editor/UI state that should persist but isn't host-automatable.
     int  getSelectedBand() const noexcept       { return selectedBand.load(); }
     void setSelectedBand (int i) noexcept        { selectedBand.store (juce::jlimit (0, numBands - 1, i)); }
@@ -118,6 +134,14 @@ private:
     std::atomic<float> autoGainDb { 0.0f };
 
     AnalyzerFifo analyzer;
+
+    // EQ-match capture: lock-free taps fed pre-EQ (source) / from sidechain (reference)
+    // while capturing; averaged curves are message-thread-only state.
+    AnalyzerFifo       captureSrc, captureRef;
+    std::atomic<bool>  capturing { false };
+    std::atomic<bool>  sidechainOn { false };
+    std::array<float, kMatchBins> refCurve {}, srcCurve {};
+    bool hasRef = false, hasSrc = false;
 
     // Non-automated, persisted UI state.
     std::atomic<int> selectedBand { 3 };

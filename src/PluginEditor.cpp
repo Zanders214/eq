@@ -26,6 +26,8 @@ ZandersEqEditor::ZandersEqEditor (ZandersEqAudioProcessor& p)
     graph.onSelectionChanged = rebind;
     strip.onSelectionChanged = rebind;
     presetBar.onPresetApplied = [this] { rail.refresh(); graph.repaint(); strip.repaint(); };
+    rail.onCapture = [this] { graph.toggleCapture(); };
+    rail.onMatch   = [this] { graph.runMatch(); strip.repaint(); rail.refresh(); graph.repaint(); };
 
     setSize (1100, 728);
     setResizable (false, false);

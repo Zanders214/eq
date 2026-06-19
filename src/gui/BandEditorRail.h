@@ -23,13 +23,17 @@ public:
     void bindToSelected();   // rebind the FREQ/GAIN/Q sliders to the selected band
     void refresh();          // poll values, update dynamic styling, repaint
 
+    std::function<void()> onCapture;   // EQ-match: start/stop capture
+    std::function<void()> onMatch;     // EQ-match: apply the fit
+
 private:
     using Attachment = juce::AudioProcessorValueTreeState::SliderAttachment;
 
     struct Layout
     {
         juce::Rectangle<int> header, typeChips, freqBlock, gainBlock, qBlock,
-                             slopeRow, onSolo, bottom, dial, modeBtn, hqBtn, autoBtn;
+                             slopeRow, onSolo, bottom, dial, modeBtn, hqBtn, autoBtn,
+                             matchLabel, matchAmtRow, matchBtnRow, captureBtn, matchBtn;
     };
     Layout computeLayout() const;
 
@@ -44,8 +48,8 @@ private:
     ZandersEqAudioProcessor& proc;
     juce::AudioProcessorValueTreeState& apvts;
 
-    juce::Slider freqSlider, gainSlider, qSlider, outputDial;
-    std::unique_ptr<Attachment> freqAtt, gainAtt, qAtt, outAtt;
+    juce::Slider freqSlider, gainSlider, qSlider, outputDial, matchAmountSlider;
+    std::unique_ptr<Attachment> freqAtt, gainAtt, qAtt, outAtt, matchAmtAtt;
 
     int lastSelected = -1;
 

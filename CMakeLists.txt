@@ -15,6 +15,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(ZEQ_BUILD_STANDALONE "Build the Standalone target (handy for testing)" ON)
+option(ZEQ_BUILD_TESTS "Build the MatchFit unit-test executable" OFF)
 
 # --- JUCE -------------------------------------------------------------------
 include(FetchContent)
@@ -92,3 +93,11 @@ target_link_libraries(ZandersEQ PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+
+# --- Unit tests (pure DSP, no JUCE) -----------------------------------------
+if(ZEQ_BUILD_TESTS)
+    add_executable(ZandersEQTests tests/MatchFitTests.cpp)
+    target_compile_features(ZandersEQTests PRIVATE cxx_std_17)
+    enable_testing()
+    add_test(NAME MatchFitTests COMMAND ZandersEQTests)
+endif()

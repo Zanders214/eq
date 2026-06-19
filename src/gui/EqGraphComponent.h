@@ -35,7 +35,7 @@ public:
     std::function<void()> onSelectionChanged;
 
 private:
-    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; };
+    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; int channel; };
 
     BandView readBand (int i) const;
     bool anySolo() const;

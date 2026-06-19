@@ -20,14 +20,19 @@ follower on the band's own filtered signal (or a sidechain).
 - **UI** (`EqGraphComponent`): a second handle on the node for threshold/range, and a
   moving "live gain" ghost on the curve. Rail gains a small dynamics sub-panel.
 
-## 2. Per-band channel mode (L / R / M / S / Stereo)
-Today Stereo↔Mid/Side is global. Pro-Q lets each band target L, R, M, S or Stereo.
+## 2. Per-band channel mode ✅ (implemented — domain-master model)
+The global Stereo/Mid-Side toggle is kept as a **domain master**; each band then targets a
+lane *within* that domain: **Both / first / second** (= L+R·L·R in Stereo, M+S·M·S in
+Mid-Side). Because the whole chain shares one domain, the M/S encode/decode stays once per
+sample and "Both" reproduces the old global behaviour exactly.
 
-- **DSP**: process up to four lanes (L,R,M,S) and route each band to its lane. Cheapest
-  path: always compute both stereo and M/S encodings and pick per band, decoding once at
-  the end. A modest restructure of `processEq`.
-- **Params/UI**: `bandN_channel` choice; a channel chip in the rail; node tint or a small
-  L/R/M/S glyph per node.
+- **DSP** (`PluginProcessor::processEq` + `applyBand` in `dsp/Biquad.h`): encode the domain
+  once per sample, run each active band through its lane(s), decode once. State resets on a
+  global-domain flip (all bands) and per-band lane change. Unit-tested in
+  `tests/ChannelRoutingTests.cpp`.
+- **UI**: per-band `bandN_channel` choice; a 3-chip rail row that relabels with the global
+  domain; an L/R/M/S letter badge on non-Both nodes.
+- *Possible follow-up*: free per-band L/R/M/S mixing (would require per-band encode/decode).
 
 ## 3. Phase modes: Zero-Latency / Natural / Linear-Phase
 A linear-phase path via FFT (overlap-add) convolution of the summed impulse response,

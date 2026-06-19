@@ -14,7 +14,7 @@ namespace
         {
             fn (ids::type (i));  fn (ids::freq (i)); fn (ids::gain (i));
             fn (ids::q (i));     fn (ids::slope (i)); fn (ids::on (i));
-            fn (ids::solo (i));
+            fn (ids::solo (i));  fn (ids::channel (i));
         }
         fn (ids::output); fn (ids::mode); fn (ids::hq); fn (ids::autogain); fn (ids::matchamount);
     }
@@ -36,6 +36,7 @@ ZandersEqAudioProcessor::ZandersEqAudioProcessor()
         bandParams[(size_t) i].slope = apvts.getRawParameterValue (ids::slope (i));
         bandParams[(size_t) i].on    = apvts.getRawParameterValue (ids::on (i));
         bandParams[(size_t) i].solo  = apvts.getRawParameterValue (ids::solo (i));
+        bandParams[(size_t) i].channel = apvts.getRawParameterValue (ids::channel (i));
     }
     outputParam   = apvts.getRawParameterValue (ids::output);
     modeParam     = apvts.getRawParameterValue (ids::mode);
@@ -65,7 +66,9 @@ void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
         qSm  [(size_t) i].setCurrentAndTargetValue (bandParams[(size_t) i].q->load());
         bands[(size_t) i].reset();
         bands[(size_t) i].active = false;
+        lastChannel[(size_t) i] = -1;
     }
+    lastMs = false;
     outputSm.reset (baseSampleRate, ramp);
     outputSm.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
     autoGainSm.reset (baseSampleRate, 0.08);   // slower ramp so the trim doesn't pump
@@ -226,11 +229,22 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels,
                                          int numSamples, double sr) noexcept
 {
-    const bool ms = numChannels >= 2 && modeParam->load() > 0.5f;
+    const bool stereo = numChannels >= 2;
+    const bool ms     = stereo && modeParam->load() > 0.5f;
 
     bool anySolo = false;
     for (int i = 0; i < numBands; ++i)
         anySolo = anySolo || (bandParams[(size_t) i].solo->load() > 0.5f);
+
+    // Global-domain flip (L/R <-> M/S) changes what every state set carries — reset all.
+    if (ms != lastMs)
+    {
+        for (int i = 0; i < numBands; ++i)
+            bands[(size_t) i].reset();
+        lastMs = ms;
+    }
+
+    std::array<int, numBands> lane {};   // resolved per-band lane for this sub-block
 
     int pos = 0;
     while (pos < numSamples)
@@ -249,48 +263,48 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
             const bool on     = bandParams[(size_t) i].on->load() > 0.5f;
             const bool solo   = bandParams[(size_t) i].solo->load() > 0.5f;
             const bool active = on && (! anySolo || solo);
+            const int  chMode = (int) bandParams[(size_t) i].channel->load();
+            lane[(size_t) i]  = chMode;
 
-            if (active != bands[(size_t) i].active)
+            const bool laneChanged = chMode != lastChannel[(size_t) i];
+            if (active != bands[(size_t) i].active || laneChanged)
             {
-                if (! active)
+                if (! active || laneChanged)
                     bands[(size_t) i].reset();
                 bands[(size_t) i].active = active;
             }
+            lastChannel[(size_t) i] = chMode;
+
             if (active)
                 bands[(size_t) i].updateCoeffs (type, f, g, qq, slope, sr);
         }
 
-        if (ms)
+        if (stereo)
         {
             float* L = channels[0];
             float* R = channels[1];
             for (int s = pos; s < pos + len; ++s)
             {
-                float mid  = 0.5f * (L[s] + R[s]);
-                float side = 0.5f * (L[s] - R[s]);
+                // canonical lane pair for the whole chain: L/R, or M/S (encoded once)
+                float a = ms ? 0.5f * (L[s] + R[s]) : L[s];
+                float b = ms ? 0.5f * (L[s] - R[s]) : R[s];
                 for (int i = 0; i < numBands; ++i)
                     if (bands[(size_t) i].active)
-                    {
-                        mid  = bands[(size_t) i].processSample (0, mid);
-                        side = bands[(size_t) i].processSample (1, side);
-                    }
-                L[s] = mid + side;
-                R[s] = mid - side;
+                        applyBand (bands[(size_t) i], lane[(size_t) i], a, b);
+                if (ms) { L[s] = a + b; R[s] = a - b; }
+                else    { L[s] = a;     R[s] = b;     }
             }
         }
-        else
+        else // mono: lane-agnostic, filter the single channel through state set 0
         {
+            float* M = channels[0];
             for (int s = pos; s < pos + len; ++s)
             {
-                for (int c = 0; c < numChannels; ++c)
-                {
-                    const int stateCh = juce::jmin (c, 1);
-                    float x = channels[c][s];
-                    for (int i = 0; i < numBands; ++i)
-                        if (bands[(size_t) i].active)
-                            x = bands[(size_t) i].processSample (stateCh, x);
-                    channels[c][s] = x;
-                }
+                float x = M[s];
+                for (int i = 0; i < numBands; ++i)
+                    if (bands[(size_t) i].active)
+                        x = bands[(size_t) i].processSample (0, x);
+                M[s] = x;
             }
         }
         pos += len;

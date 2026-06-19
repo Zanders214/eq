@@ -63,4 +63,15 @@ struct BandDsp
     }
 };
 
+// Per-band lane routing within the current global domain (L/R or M/S).
+//   a = first lane  (L or Mid, state set 0)
+//   b = second lane (R or Side, state set 1)
+//   lane: 0 = both, 1 = first only, 2 = second only.
+// Shared by the audio thread (processEq) and the routing unit test.
+inline void applyBand (BandDsp& band, int lane, float& a, float& b) noexcept
+{
+    if (lane != 2) a = band.processSample (0, a);   // both or first
+    if (lane != 1) b = band.processSample (1, b);   // both or second
+}
+
 } // namespace zeq

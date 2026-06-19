@@ -26,6 +26,7 @@ namespace ids
     inline juce::String slope (int i)               { return band (i) + "slope"; }
     inline juce::String on    (int i)               { return band (i) + "on"; }
     inline juce::String solo  (int i)               { return band (i) + "solo"; }
+    inline juce::String channel (int i)             { return band (i) + "channel"; }
 }
 
 // Parameter ranges (shared by the engine and the UI mappings).
@@ -129,6 +130,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
         layout.add (std::make_unique<AudioParameterBool> (
             ParameterID { ids::solo (i), 1 }, g + "Solo", false));
+
+        // Per-band lane within the global domain: Both / first / second
+        // (= L+R/L/R in Stereo, M+S/M/S in Mid-Side).
+        layout.add (std::make_unique<AudioParameterChoice> (
+            ParameterID { ids::channel (i), 1 }, g + "Channel",
+            StringArray { "Both", "Left / Mid", "Right / Side" }, 0));
     }
 
     layout.add (std::make_unique<AudioParameterFloat> (

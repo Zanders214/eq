@@ -98,6 +98,11 @@ target_link_libraries(ZandersEQ PRIVATE
 if(ZEQ_BUILD_TESTS)
     add_executable(ZandersEQTests tests/MatchFitTests.cpp)
     target_compile_features(ZandersEQTests PRIVATE cxx_std_17)
+
+    add_executable(ZandersEQRoutingTests tests/ChannelRoutingTests.cpp)
+    target_compile_features(ZandersEQRoutingTests PRIVATE cxx_std_17)
+
     enable_testing()
     add_test(NAME MatchFitTests COMMAND ZandersEQTests)
+    add_test(NAME ChannelRoutingTests COMMAND ZandersEQRoutingTests)
 endif()

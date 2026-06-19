@@ -29,7 +29,7 @@ ZandersEqEditor::ZandersEqEditor (ZandersEqAudioProcessor& p)
     rail.onCapture = [this] { graph.toggleCapture(); };
     rail.onMatch   = [this] { graph.runMatch(); strip.repaint(); rail.refresh(); graph.repaint(); };
 
-    setSize (1100, 728);
+    setSize (1100, 772);
     setResizable (false, false);
     startTimerHz (60);
 }

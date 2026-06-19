@@ -50,6 +50,7 @@ EqGraphComponent::BandView EqGraphComponent::readBand (int i) const
     b.on    = apvts.getRawParameterValue (ids::on (i))->load() > 0.5f;
     const bool solo = apvts.getRawParameterValue (ids::solo (i))->load() > 0.5f;
     b.live  = b.on && (! anySolo() || solo);
+    b.channel = (int) apvts.getRawParameterValue (ids::channel (i))->load();
     return b;
 }
 
@@ -285,6 +286,7 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
 void EqGraphComponent::drawNodes (juce::Graphics& g)
 {
     const int sel = proc.getSelectedBand();
+    const bool ms = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
     for (int i = 0; i < numBands; ++i)
     {
         const auto b = readBand (i);
@@ -310,6 +312,21 @@ void EqGraphComponent::drawNodes (juce::Graphics& g)
         g.setFont (Fonts::grotesk (9.0f, Fonts::semibold));
         g.drawText (juce::String (i + 1), juce::Rectangle<float> (pos.x - r, pos.y - r, r * 2, r * 2),
                     juce::Justification::centred);
+
+        // channel-lane badge (first/second lane only) at the node's upper-right
+        if (b.channel == 1 || b.channel == 2)
+        {
+            const juce::String letter = ms ? (b.channel == 1 ? "M" : "S")
+                                           : (b.channel == 1 ? "L" : "R");
+            const float br = 6.0f;
+            juce::Point<float> bp (pos.x + r * 0.75f, pos.y - r * 0.95f);
+            g.setColour (col);
+            g.fillEllipse (bp.x - br, bp.y - br, br * 2, br * 2);
+            g.setColour (juce::Colour (0xff0a0b12));
+            g.setFont (Fonts::grotesk (8.0f, Fonts::bold));
+            g.drawText (letter, juce::Rectangle<float> (bp.x - br, bp.y - br, br * 2, br * 2),
+                        juce::Justification::centred);
+        }
     }
 }
 

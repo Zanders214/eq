@@ -25,8 +25,10 @@ shipping product is the JUCE plugin under `src/`.
   double-click empty space to add a band, double-click a node to remove it, click to select.
 - **Spectrum grab** — press-drag on empty analyzer space to spawn a bell snapped to the
   nearest spectral peak and pull it in one gesture.
-- **Output gain** (±24 dB), **Stereo / Mid-Side** processing, **HQ 2× oversampling**, and
+- **Output gain** (±24 dB), global **Stereo / Mid-Side** domain, **HQ 2× oversampling**, and
   **Auto-gain** (loudness-matched output trim, shown live next to the toggle).
+- **Per-band channel lane** — within the global domain each band targets Both / first / second
+  (L+R·L·R in Stereo, M+S·M·S in Mid-Side); non-Both bands show an L/R/M/S letter on their node.
 - **EQ match** — capture a reference (sidechain input) and the source simultaneously, then
   fit the 6 bands to their tonal-balance difference (greedy peak-pick + weighted
   least-squares), with a Match Amount control and a ghost target curve. Result stays fully

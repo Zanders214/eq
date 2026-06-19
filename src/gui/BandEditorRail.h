@@ -32,7 +32,7 @@ private:
     struct Layout
     {
         juce::Rectangle<int> header, typeChips, freqBlock, gainBlock, qBlock,
-                             slopeRow, onSolo, bottom, dial, modeBtn, hqBtn, autoBtn,
+                             slopeRow, onSolo, channelRow, bottom, dial, modeBtn, hqBtn, autoBtn,
                              matchLabel, matchAmtRow, matchBtnRow, captureBtn, matchBtn;
     };
     Layout computeLayout() const;

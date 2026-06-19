@@ -139,7 +139,8 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
     L.gainBlock = top.removeFromTop (42); top.removeFromTop (16);
     L.qBlock    = top.removeFromTop (42); top.removeFromTop (8);
     L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
-    L.onSolo    = top.removeFromTop (36);
+    L.onSolo    = top.removeFromTop (36); top.removeFromTop (14);
+    L.channelRow = top.removeFromTop (28);
 
     // EQ-match panel fills the gap between on/solo and the bottom dial/toggle block.
     auto matchArea = top;
@@ -270,6 +271,16 @@ void BandEditorRail::paint (juce::Graphics& g)
         g.drawText ("SOLO", soloBtn, juce::Justification::centred);
     }
 
+    // per-band channel lane (labels follow the global Stereo/MS domain)
+    {
+        const int ch = (int) apvts.getRawParameterValue (ids::channel (s))->load();
+        const char* lr[3] = { "L + R", "L", "R" };
+        const char* msl[3] = { "M + S", "M", "S" };
+        for (int i = 0; i < 3; ++i)
+            drawChip (g, segment (L.channelRow, i, 3, 5.0f), ch == i,
+                      ms ? msl[i] : lr[i], 9.0f, 0.06f);
+    }
+
     // EQ-match panel
     {
         auto label = L.matchLabel;
@@ -354,6 +365,14 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
     auto soloBtn = juce::Rectangle<int> (L.onSolo).removeFromRight (L.onSolo.getWidth() / 2 - 3).toFloat();
     if (onBtn.contains (p))   { setBool (ids::on (s),   ! (apvts.getRawParameterValue (ids::on (s))->load() > 0.5f)); repaint(); return; }
     if (soloBtn.contains (p)) { setBool (ids::solo (s), ! (apvts.getRawParameterValue (ids::solo (s))->load() > 0.5f)); repaint(); return; }
+
+    for (int i = 0; i < 3; ++i)
+        if (segment (L.channelRow, i, 3, 5.0f).contains (p))
+        {
+            setChoice (ids::channel (s), i);
+            repaint();
+            return;
+        }
 
     if (L.modeBtn.toFloat().contains (p)) { setChoice (ids::mode, apvts.getRawParameterValue (ids::mode)->load() > 0.5f ? 0 : 1); repaint(); return; }
     if (L.hqBtn.toFloat().contains (p))   { setBool (ids::hq, ! (apvts.getRawParameterValue (ids::hq)->load() > 0.5f)); repaint(); return; }

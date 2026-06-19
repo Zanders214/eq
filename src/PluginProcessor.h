@@ -108,6 +108,7 @@ private:
         std::atomic<float>* slope = nullptr;
         std::atomic<float>* on    = nullptr;
         std::atomic<float>* solo  = nullptr;
+        std::atomic<float>* channel = nullptr;
     };
 
     void processEq (float* const* channels, int numChannels, int numSamples, double sr) noexcept;
@@ -131,6 +132,8 @@ private:
     double baseSampleRate = 48000.0;
     double smootherRate   = 48000.0;
     bool   lastHq         = false;
+    bool   lastMs         = false;                  // global-domain change detector
+    std::array<int, numBands> lastChannel { };      // per-band lane change detector
     std::atomic<float> autoGainDb { 0.0f };
 
     AnalyzerFifo analyzer;

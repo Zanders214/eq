@@ -138,7 +138,7 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
     L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
     L.onSolo    = top.removeFromTop (36);
 
-    auto bottom = getLocalBounds().removeFromBottom (96);
+    auto bottom = getLocalBounds().removeFromBottom (112);
     L.bottom = bottom;
     auto inner = bottom.withTrimmedTop (18);
     L.dial = inner.removeFromLeft (72);

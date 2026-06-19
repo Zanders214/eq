@@ -1,0 +1,7 @@
+/* Neon Plugins — global stylesheet entry point.
+   Consumers link THIS file only. Imports below ship the full token + font closure. */
+@import "./fonts/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/effects.css";

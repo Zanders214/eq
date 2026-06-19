@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/fonts/fonts.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/effects.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/styles.css">
+  <script src="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/_ds_bundle.js"></script>
+  <style>
+    body { margin: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width:max-content;min-width:100%;min-height:100vh;box-sizing:border-box;padding:48px;background:#e7e5df;font-family:var(--font-display)">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:32px;margin-bottom:30px;max-width:2860px">
+    <div>
+      <div style="font-size:11px;letter-spacing:0.22em;color:#a39e94;font-weight:600;margin-bottom:10px">NEON PLUGINS · ZANDERS LINE</div>
+      <div style="font-size:30px;letter-spacing:-0.02em;color:#1c1a16;font-weight:600;line-height:1">ZandersEQ — parametric EQ, three layout takes</div>
+      <div style="font-size:14px;color:#57534e;margin-top:10px;max-width:680px;line-height:1.5">A live FFT analyzer sits behind a draggable response curve. Each take wraps the same interactive engine in a different control surface. All three are independent and fully playable.</div>
+    </div>
+    <div style="display:flex;gap:10px;flex:none">
+      <div style="background:#fff;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:11px 14px">
+        <div style="font-size:9px;letter-spacing:0.14em;color:#a39e94;font-weight:600;margin-bottom:5px">DRAG NODE</div>
+        <div style="font-size:12px;color:#1c1a16;font-family:var(--font-mono)">freq · gain</div>
+      </div>
+      <div style="background:#fff;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:11px 14px">
+        <div style="font-size:9px;letter-spacing:0.14em;color:#a39e94;font-weight:600;margin-bottom:5px">SCROLL NODE</div>
+        <div style="font-size:12px;color:#1c1a16;font-family:var(--font-mono)">Q width</div>
+      </div>
+      <div style="background:#fff;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:11px 14px">
+        <div style="font-size:9px;letter-spacing:0.14em;color:#a39e94;font-weight:600;margin-bottom:5px">DBL-CLICK</div>
+        <div style="font-size:12px;color:#1c1a16;font-family:var(--font-mono)">graph add · node del</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:48px;align-items:flex-start">
+
+    <!-- ============ TAKE 01 — ANALYZER FIRST ============ -->
+    <div style="flex:none">
+      <div style="font-size:11px;letter-spacing:0.18em;color:#6b675f;font-weight:600;margin-bottom:12px">TAKE 01 · ANALYZER-FIRST <span style="color:#a39e94">— curve fills the panel, bands in a strip below</span></div>
+      <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Panel" width="{{ N.w1 }}" pad="{{ N.pad }}" hint-size="900px,520px">
+        <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Wordmark" product="EQ" color="#8b7bff" size="{{ N.wm }}" hint-size="120px,24px"></x-import>
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Badge" hint-size="64px,22px">SHAPE</x-import>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.14em;transition:all .15s" style="{{ F0.modeStyle }}" onClick="{{ F0.modeToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F0.modeDot }}"></span>{{ F0.modeLabel }}</div>
+            <div style="display:flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.14em;transition:all .15s" style="{{ F0.hqStyle }}" onClick="{{ F0.hqToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F0.hqDot }}"></span>HQ</div>
+            <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 13px;border-radius:8px;background:var(--well);border:var(--border-line)">
+              <span style="font-size:9px;letter-spacing:0.14em;color:var(--text-label);font-weight:600">OUT</span>
+              <span style="font-family:var(--font-mono);font-size:13px;color:var(--text-1)">{{ F0.outLabel }}</span>
+            </div>
+          </div>
+        </header>
+
+        <div style="background:var(--well);border-radius:12px;box-shadow:var(--shadow-window);padding:4px;overflow:hidden">
+          <x-import component="EQGraph" from="./EQGraph.jsx" bands="{{ F0.bands }}" selected-id="{{ F0.sel }}" on-select="{{ F0.onSelect }}" on-change="{{ F0.onChange }}" on-add="{{ F0.onAdd }}" on-remove="{{ F0.onRemove }}" width="844" height="300" hint-size="844px,300px"></x-import>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <sc-for list="{{ F0.cells }}" as="c" hint-placeholder-count="6">
+            <div style="flex:1;border-radius:10px;padding:10px 11px;transition:all .15s" style="{{ c.cellStyle }}">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:6px;cursor:pointer" onClick="{{ c.select }}">
+                  <span style="width:9px;height:9px;border-radius:50%" style="{{ c.dotStyle }}"></span>
+                  <span style="font-size:12px;font-weight:600;color:var(--text-1)">{{ c.num }}</span>
+                </div>
+                <div style="display:flex;gap:4px">
+                  <div style="width:20px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:8px;font-weight:700;letter-spacing:0.04em" style="{{ c.soloStyle }}" onClick="{{ c.solo }}">S</div>
+                  <div style="width:26px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:8px;font-weight:700;letter-spacing:0.06em" style="{{ c.onStyle }}" onClick="{{ c.toggle }}">{{ c.onText }}</div>
+                </div>
+              </div>
+              <div onClick="{{ c.select }}" style="cursor:pointer">
+                <div style="font-size:9px;letter-spacing:0.12em;color:var(--text-label);font-weight:600;margin-bottom:4px">{{ c.typeLabel }}</div>
+                <div style="font-family:var(--font-mono);font-size:14px;color:var(--text-1);font-weight:500">{{ c.freqLabel }}</div>
+                <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);margin-top:2px">{{ c.subLabel }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ TAKE 02 — KNOB BANK ============ -->
+    <div style="flex:none">
+      <div style="font-size:11px;letter-spacing:0.18em;color:#6b675f;font-weight:600;margin-bottom:12px">TAKE 02 · KNOB BANK <span style="color:#a39e94">— hardware feel, a module per band</span></div>
+      <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Panel" width="{{ N.w1 }}" pad="{{ N.pad }}" hint-size="900px,520px">
+        <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Wordmark" product="EQ" color="#8b7bff" size="{{ N.wm }}" hint-size="120px,24px"></x-import>
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Badge" hint-size="64px,22px">SHAPE</x-import>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.14em;transition:all .15s" style="{{ F1.modeStyle }}" onClick="{{ F1.modeToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F1.modeDot }}"></span>{{ F1.modeLabel }}</div>
+            <div style="display:flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.14em;transition:all .15s" style="{{ F1.hqStyle }}" onClick="{{ F1.hqToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F1.hqDot }}"></span>HQ</div>
+            <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 13px;border-radius:8px;background:var(--well);border:var(--border-line)">
+              <span style="font-size:9px;letter-spacing:0.14em;color:var(--text-label);font-weight:600">OUT</span>
+              <span style="font-family:var(--font-mono);font-size:13px;color:var(--text-1)">{{ F1.outLabel }}</span>
+            </div>
+          </div>
+        </header>
+
+        <div style="background:var(--well);border-radius:12px;box-shadow:var(--shadow-window);padding:4px;overflow:hidden">
+          <x-import component="EQGraph" from="./EQGraph.jsx" bands="{{ F1.bands }}" selected-id="{{ F1.sel }}" on-select="{{ F1.onSelect }}" on-change="{{ F1.onChange }}" on-add="{{ F1.onAdd }}" on-remove="{{ F1.onRemove }}" width="844" height="226" compact="{{ true }}" hint-size="844px,226px"></x-import>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:16px">
+          <sc-for list="{{ F1.cells }}" as="c" hint-placeholder-count="6">
+            <div style="flex:1;min-width:0;border-radius:10px;padding:13px 6px 12px;display:flex;flex-direction:column;align-items:center;transition:all .15s" style="{{ c.moduleStyle }}">
+              <div onClick="{{ c.select }}" style="cursor:pointer;display:flex;align-items:center;gap:6px;margin-bottom:12px">
+                <span style="width:8px;height:8px;border-radius:50%" style="{{ c.dotStyle }}"></span>
+                <span style="font-size:9px;letter-spacing:0.1em;color:var(--text-2);font-weight:600;white-space:nowrap">{{ c.typeLabel }}</span>
+              </div>
+              <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Dial" value="{{ c.dialValue }}" onChange="{{ c.dialOnChange }}" color="{{ c.color }}" label="{{ c.dialLabel }}" size="{{ N.dial }}" format="{{ c.dialFormat }}" hint-size="80px,98px"></x-import>
+              <div style="font-family:var(--font-mono);font-size:13px;color:var(--text-1);font-weight:500;margin-top:12px">{{ c.freqLabel }}</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-3);margin-top:3px;white-space:nowrap">{{ c.qReadout }}</div>
+              <div style="display:flex;gap:5px;margin-top:11px">
+                <div style="width:32px;height:21px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:8px;font-weight:700;letter-spacing:0.04em" style="{{ c.onStyle }}" onClick="{{ c.toggle }}">{{ c.onText }}</div>
+                <div style="width:21px;height:21px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:8px;font-weight:700" style="{{ c.soloStyle }}" onClick="{{ c.solo }}">S</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ TAKE 03 — SIDE RAIL EDITOR ============ -->
+    <div style="flex:none">
+      <div style="font-size:11px;letter-spacing:0.18em;color:#6b675f;font-weight:600;margin-bottom:12px">TAKE 03 · SIDE-RAIL EDITOR <span style="color:#a39e94">— full band editor + global controls</span></div>
+      <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Panel" width="{{ N.w3 }}" pad="{{ N.pad }}" hint-size="960px,520px">
+        <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Wordmark" product="EQ" color="#8b7bff" size="{{ N.wm }}" hint-size="120px,24px"></x-import>
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Badge" hint-size="64px,22px">SHAPE</x-import>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:3px;height:30px;padding:3px;border-radius:8px;background:var(--well);border:var(--border-line)">
+              <div style="height:24px;padding:0 12px;border-radius:6px;display:flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F2.abAStyle }}" onClick="{{ F2.abA }}">A</div>
+              <div style="height:24px;padding:0 12px;border-radius:6px;display:flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F2.abBStyle }}" onClick="{{ F2.abB }}">B</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 13px;border-radius:8px;background:var(--well);border:var(--border-line)">
+              <span style="font-size:9px;letter-spacing:0.14em;color:var(--text-label);font-weight:600">OUT</span>
+              <span style="font-family:var(--font-mono);font-size:13px;color:var(--text-1)">{{ F2.outLabel }}</span>
+            </div>
+          </div>
+        </header>
+
+        <div style="display:flex;gap:20px;align-items:stretch">
+          <div style="flex:none">
+            <div style="background:var(--well);border-radius:12px;box-shadow:var(--shadow-window);padding:4px;overflow:hidden">
+              <x-import component="EQGraph" from="./EQGraph.jsx" bands="{{ F2.bands }}" selected-id="{{ F2.sel }}" on-select="{{ F2.onSelect }}" on-change="{{ F2.onChange }}" on-add="{{ F2.onAdd }}" on-remove="{{ F2.onRemove }}" width="600" height="360" hint-size="600px,360px"></x-import>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:12px">
+              <sc-for list="{{ F2.presets }}" as="p" hint-placeholder-count="6">
+                <div style="flex:1;text-align:center;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:0.04em;transition:all .15s" style="{{ p.style }}" onClick="{{ p.apply }}">{{ p.name }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- RAIL -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:0;min-width:0">
+            <!-- selected band editor -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:11px;height:11px;border-radius:50%" style="{{ F2.selDot }}"></span>
+                <span style="font-size:13px;font-weight:600;color:var(--text-1)">BAND {{ F2.selNum }}</span>
+              </div>
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-3)">{{ F2.selType }}</div>
+            </div>
+
+            <div style="display:flex;gap:5px;margin-bottom:16px">
+              <sc-for list="{{ F2.typeChips }}" as="t" hint-placeholder-count="6">
+                <div style="flex:1;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;font-size:9px;font-weight:600;letter-spacing:0.05em;transition:all .15s" style="{{ t.style }}" onClick="{{ t.apply }}">{{ t.label }}</div>
+              </sc-for>
+            </div>
+
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Slider" value="{{ F2.freq01 }}" onChange="{{ F2.setFreq }}" label="FREQUENCY" valueLabel="{{ F2.freqLabel }}" gradient="var(--ramp-cool)" hint-size="100%,42px" style="margin-bottom:14px"></x-import>
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Slider" value="{{ F2.gain01 }}" onChange="{{ F2.setGain }}" label="GAIN" valueLabel="{{ F2.gainLabel }}" gradient="{{ F2.gainGrad }}" hint-size="100%,42px" style="margin-bottom:14px"></x-import>
+            <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Slider" value="{{ F2.q01 }}" onChange="{{ F2.setQ }}" label="Q / SLOPE" valueLabel="{{ F2.qLabel }}" gradient="var(--ramp-warm)" hint-size="100%,42px" style="margin-bottom:16px"></x-import>
+
+            <div style="display:flex;gap:6px;margin-bottom:18px">
+              <div style="flex:1;height:34px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:8px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F2.selOnStyle }}" onClick="{{ F2.selToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F2.selOnDot }}"></span>{{ F2.selOnText }}</div>
+              <div style="flex:1;height:34px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:8px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F2.selSoloStyle }}" onClick="{{ F2.selSolo }}">SOLO</div>
+            </div>
+
+            <div style="border-top:var(--border-line);margin:0 -2px 16px;padding-top:16px;display:flex;align-items:center;gap:16px">
+              <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Dial" value="{{ F2.output01 }}" onChange="{{ F2.setOutput }}" color="var(--accent)" label="OUTPUT" size="{{ N.out }}" format="{{ F2.outDialFormat }}" hint-size="66px,90px"></x-import>
+              <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.12em;transition:all .15s" style="{{ F2.modeStyle }}" onClick="{{ F2.modeToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F2.modeDot }}"></span>{{ F2.modeLabel }}</div>
+                <div style="display:flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.12em;transition:all .15s" style="{{ F2.hqStyle }}" onClick="{{ F2.hqToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F2.hqDot }}"></span>HQ OVERSAMPLING</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { frames: [this.mkFrame(), this.mkFrame(), this.mkFrame()] };
+  }
+
+  // ---- defaults ----------------------------------------------------------
+  defaultBands() {
+    return [
+      { id: 0, type: "hpf", freq: 30, gain: 0, q: 0.71, slope: 24, on: true, solo: false },
+      { id: 1, type: "bell", freq: 95, gain: 3.2, q: 0.9, on: true, solo: false },
+      { id: 2, type: "bell", freq: 420, gain: -3.8, q: 1.5, on: true, solo: false },
+      { id: 3, type: "bell", freq: 2600, gain: 2.6, q: 1.1, on: true, solo: false },
+      { id: 4, type: "highshelf", freq: 8200, gain: 3.6, q: 0.7, on: true, solo: false },
+      { id: 5, type: "lpf", freq: 19000, gain: 0, q: 0.71, slope: 12, on: true, solo: false },
+    ];
+  }
+  mkFrame() {
+    return {
+      bands: this.defaultBands(),
+      other: this.defaultBands(),
+      slot: "A",
+      sel: 3,
+      next: 6,
+      output: 0.5,
+      mode: "STEREO",
+      hq: true,
+    };
+  }
+
+  // ---- math helpers ------------------------------------------------------
+  rampColor(t) {
+    const RAMP = [[52, 216, 255], [139, 123, 255], [255, 95, 168], [255, 194, 75]];
+    t = Math.min(1, Math.max(0, t));
+    const seg = t * 3, i = Math.min(2, Math.floor(seg)), f = seg - i;
+    const a = RAMP[i], b = RAMP[i + 1];
+    const c = (k) => Math.round(a[k] + (b[k] - a[k]) * f);
+    return `rgb(${c(0)},${c(1)},${c(2)})`;
+  }
+  colorFor(freq) { return this.rampColor(Math.log(freq / 20) / Math.log(1000)); }
+  f01(f) { return Math.log(f / 20) / Math.log(1000); }
+  invF(x) { return 20 * Math.pow(1000, Math.min(1, Math.max(0, x))); }
+  q01(q) { return Math.log(q / 0.1) / Math.log(180); }
+  invQ(x) { return 0.1 * Math.pow(180, Math.min(1, Math.max(0, x))); }
+  g01(g) { return (g + 18) / 36; }
+  invG(x) { return Math.min(1, Math.max(0, x)) * 36 - 18; }
+  isCut(t) { return t === "hpf" || t === "lpf" || t === "notch"; }
+  fmtFreq(f) { return f < 1000 ? Math.round(f) + " Hz" : (f / 1000).toFixed(f < 10000 ? 2 : 1) + " kHz"; }
+  fmtGain(g) { return (g >= 0 ? "+" : "") + g.toFixed(1) + " dB"; }
+  typeLabel(t) {
+    return { hpf: "HI-PASS", lpf: "LO-PASS", notch: "NOTCH", bell: "BELL", lowshelf: "LO SHELF", highshelf: "HI SHELF" }[t] || t;
+  }
+
+  // ---- state mutators ----------------------------------------------------
+  updateFrame(fi, fn) {
+    this.setState((s) => {
+      const frames = s.frames.slice();
+      const f = { ...frames[fi] };
+      fn(f);
+      frames[fi] = f;
+      return { frames };
+    });
+  }
+  patchBand(fi, id, patch) {
+    this.updateFrame(fi, (f) => {
+      f.bands = f.bands.map((b) => (b.id === id ? { ...b, ...patch } : b));
+    });
+  }
+  selectBand(fi, id) { this.updateFrame(fi, (f) => { f.sel = id; }); }
+  toggleBand(fi, id) {
+    this.updateFrame(fi, (f) => { f.bands = f.bands.map((b) => (b.id === id ? { ...b, on: !b.on } : b)); });
+  }
+  soloBand(fi, id) {
+    this.updateFrame(fi, (f) => { f.bands = f.bands.map((b) => (b.id === id ? { ...b, solo: !b.solo } : b)); });
+  }
+  setType(fi, id, type) {
+    this.updateFrame(fi, (f) => {
+      f.bands = f.bands.map((b) => {
+        if (b.id !== id) return b;
+        const nb = { ...b, type };
+        if (this.isCut(type) && !b.slope) nb.slope = 24;
+        return nb;
+      });
+      f.sel = id;
+    });
+  }
+  addBand(fi, freq) {
+    this.updateFrame(fi, (f) => {
+      const id = f.next;
+      f.bands = f.bands.concat({ id, type: "bell", freq, gain: 0, q: 1.0, on: true, solo: false });
+      f.next = id + 1;
+      f.sel = id;
+    });
+  }
+  removeBand(fi, id) {
+    this.updateFrame(fi, (f) => {
+      if (f.bands.length <= 1) return;
+      f.bands = f.bands.filter((b) => b.id !== id);
+      if (f.sel === id) f.sel = f.bands[0].id;
+    });
+  }
+  setOutput(fi, v) { this.updateFrame(fi, (f) => { f.output = v; }); }
+  toggleMode(fi) { this.updateFrame(fi, (f) => { f.mode = f.mode === "STEREO" ? "M/S" : "STEREO"; }); }
+  toggleHq(fi) { this.updateFrame(fi, (f) => { f.hq = !f.hq; }); }
+  setSlot(fi, slot) {
+    this.updateFrame(fi, (f) => {
+      if (f.slot === slot) return;
+      const cur = f.bands, oth = f.other;
+      f.bands = oth; f.other = cur; f.slot = slot;
+      f.sel = f.bands[0] ? f.bands[0].id : 0;
+    });
+  }
+  applyPreset(fi, bands) {
+    this.updateFrame(fi, (f) => {
+      f.bands = bands.map((b) => ({ q: 0.9, gain: 0, solo: false, on: true, ...b }));
+      f.preset = bands.__name;
+      f.sel = f.bands[Math.min(1, f.bands.length - 1)].id;
+      f.next = Math.max(...f.bands.map((b) => b.id)) + 1;
+    });
+  }
+
+  presets() {
+    const P = (name, bands) => { bands.__name = name; return { name, bands }; };
+    return [
+      P("Flat", [
+        { id: 0, type: "hpf", freq: 24, slope: 12 },
+        { id: 1, type: "bell", freq: 200, gain: 0 },
+        { id: 2, type: "bell", freq: 1000, gain: 0 },
+        { id: 3, type: "bell", freq: 5000, gain: 0 },
+      ]),
+      P("Vocal Air", [
+        { id: 0, type: "hpf", freq: 80, slope: 24 },
+        { id: 1, type: "bell", freq: 320, gain: -2.5, q: 1.4 },
+        { id: 2, type: "bell", freq: 3000, gain: 2.0, q: 0.9 },
+        { id: 3, type: "highshelf", freq: 11000, gain: 4.5, q: 0.7 },
+      ]),
+      P("De-Mud", [
+        { id: 0, type: "hpf", freq: 45, slope: 24 },
+        { id: 1, type: "bell", freq: 280, gain: -5.0, q: 1.8 },
+        { id: 2, type: "bell", freq: 500, gain: -2.5, q: 1.2 },
+        { id: 3, type: "highshelf", freq: 9000, gain: 1.8, q: 0.7 },
+      ]),
+      P("Bass Tight", [
+        { id: 0, type: "hpf", freq: 32, slope: 48 },
+        { id: 1, type: "bell", freq: 70, gain: 3.0, q: 1.0 },
+        { id: 2, type: "bell", freq: 220, gain: -3.5, q: 1.6 },
+        { id: 3, type: "lowshelf", freq: 110, gain: 1.5, q: 0.7 },
+      ]),
+      P("Lo-Fi", [
+        { id: 0, type: "hpf", freq: 180, slope: 24 },
+        { id: 1, type: "bell", freq: 900, gain: 4.0, q: 0.8 },
+        { id: 2, type: "lpf", freq: 4200, slope: 24 },
+      ]),
+      P("Bright", [
+        { id: 0, type: "bell", freq: 400, gain: -1.5, q: 1.0 },
+        { id: 1, type: "bell", freq: 4000, gain: 2.5, q: 0.9 },
+        { id: 2, type: "highshelf", freq: 10000, gain: 5.0, q: 0.7 },
+      ]),
+    ];
+  }
+
+  // ---- style builders ----------------------------------------------------
+  pillStyle(active, danger) {
+    const grad = danger ? "linear-gradient(180deg,#ff5a5a,#e23b3b)" : "linear-gradient(180deg,#5e93ff,#8b7bff)";
+    const glow = danger ? "0 0 16px rgba(255,80,80,0.45)" : "0 0 16px rgba(94,147,255,0.45)";
+    const bd = danger ? "rgba(255,120,120,0.6)" : "rgba(150,170,255,0.6)";
+    return active
+      ? { background: grad, color: "#fff", border: `1px solid ${bd}`, boxShadow: glow }
+      : { background: "var(--layer-2)", color: "var(--text-2)", border: "1px solid var(--layer-5)", boxShadow: "var(--inset-top)" };
+  }
+  dotStyle(active, danger) {
+    const c = active ? "#fff" : (danger ? "rgba(255,90,90,0.8)" : "rgba(94,147,255,0.8)");
+    return { background: c, boxShadow: `0 0 8px ${c}` };
+  }
+
+  // ---- per-frame view model ---------------------------------------------
+  buildFrame(fi) {
+    const f = this.state.frames[fi];
+    const hasSolo = f.bands.some((b) => b.solo);
+    const outDb = (f.output - 0.5) * 48;
+    const outLabel = (outDb >= 0 ? "+" : "") + outDb.toFixed(1) + " dB";
+
+    const display = f.bands.map((b, idx) => ({
+      ...b, num: idx + 1, color: this.colorFor(b.freq),
+      on: b.on && (!hasSolo || b.solo),
+    }));
+
+    const cells = f.bands.map((b, idx) => {
+      const color = this.colorFor(b.freq);
+      const cut = this.isCut(b.type);
+      const selected = b.id === f.sel;
+      const live = b.on && (!hasSolo || b.solo);
+      const knobIsGain = !cut;
+      const knobValue = knobIsGain ? this.g01(b.gain) : this.f01(b.freq);
+      const knobOnChange = knobIsGain
+        ? (v) => this.patchBand(fi, b.id, { gain: this.invG(v) })
+        : (v) => this.patchBand(fi, b.id, { freq: this.invF(v) });
+      const knobUnit = knobIsGain ? "dB" : (b.freq >= 1000 ? "k" : "");
+      const knobFormat = knobIsGain
+        ? (v) => (v * 36 - 18).toFixed(1)
+        : (v) => { const fr = this.invF(v); return fr >= 1000 ? (fr / 1000).toFixed(1) : Math.round(fr); };
+      return {
+        id: b.id, num: idx + 1, color, typeLabel: this.typeLabel(b.type),
+        freqLabel: this.fmtFreq(b.freq),
+        subLabel: cut ? (b.slope || 12) + " dB/oct" : this.fmtGain(b.gain) + " · Q" + b.q.toFixed(1),
+        knobLabel: knobIsGain ? "GAIN" : "FREQ",
+        knobValue, knobOnChange, knobUnit, knobFormat,
+        dialLabel: knobIsGain ? "GAIN" : "FREQ",
+        dialValue: knobValue,
+        dialOnChange: knobOnChange,
+        dialFormat: knobIsGain
+          ? (v) => { const g = v * 36 - 18; return (g >= 0 ? "+" : "") + g.toFixed(1); }
+          : (v) => { const fr = this.invF(v); return fr >= 1000 ? (fr / 1000).toFixed(1) + "k" : Math.round(fr) + ""; },
+        qReadout: cut ? (b.slope || 12) + " dB/oct" : "Q " + b.q.toFixed(2),
+        qValue: this.q01(b.q),
+        qOnChange: (v) => this.patchBand(fi, b.id, { q: this.invQ(v) }),
+        qFormat: (v) => this.invQ(v).toFixed(1),
+        onText: b.on ? "ON" : "OFF",
+        select: () => this.selectBand(fi, b.id),
+        toggle: () => this.toggleBand(fi, b.id),
+        solo: () => this.soloBand(fi, b.id),
+        dotStyle: { background: color, boxShadow: `0 0 8px ${color}`, opacity: live ? 1 : 0.3 },
+        cellStyle: {
+          background: selected ? "rgba(94,147,255,0.10)" : "var(--layer-1)",
+          border: selected ? "1px solid rgba(94,147,255,0.45)" : "1px solid var(--layer-3)",
+          opacity: b.on ? 1 : 0.55,
+        },
+        moduleStyle: {
+          background: selected ? "rgba(94,147,255,0.08)" : "var(--layer-1)",
+          border: selected ? "1px solid rgba(94,147,255,0.40)" : "1px solid var(--layer-3)",
+          opacity: b.on ? 1 : 0.5,
+        },
+        onStyle: b.on
+          ? { background: "rgba(94,147,255,0.18)", color: "var(--accent)", border: "1px solid var(--accent-line)" }
+          : { background: "var(--layer-2)", color: "var(--text-label)", border: "1px solid var(--layer-3)" },
+        soloStyle: b.solo
+          ? { background: "linear-gradient(180deg,#ffc24b,#ff5fa8)", color: "#1c1a16", border: "1px solid rgba(255,194,75,0.6)" }
+          : { background: "var(--layer-2)", color: "var(--text-label)", border: "1px solid var(--layer-3)" },
+      };
+    });
+
+    const vm = {
+      bands: display, sel: f.sel, cells,
+      outLabel, output01: f.output,
+      onSelect: (id) => this.selectBand(fi, id),
+      onChange: (id, patch) => this.patchBand(fi, id, patch),
+      onAdd: (freq) => this.addBand(fi, freq),
+      onRemove: (id) => this.removeBand(fi, id),
+      modeLabel: f.mode === "STEREO" ? "STEREO" : "MID/SIDE",
+      modeToggle: () => this.toggleMode(fi),
+      modeStyle: this.pillStyle(f.mode !== "STEREO"),
+      modeDot: this.dotStyle(f.mode !== "STEREO"),
+      hqToggle: () => this.toggleHq(fi),
+      hqStyle: this.pillStyle(f.hq),
+      hqDot: this.dotStyle(f.hq),
+      setOutput: (v) => this.setOutput(fi, v),
+      outDialFormat: (v) => { const d = (v - 0.5) * 48; return (d >= 0 ? "+" : "") + d.toFixed(0); },
+    };
+    return { vm, f };
+  }
+
+  // ---- side-rail (frame 2) extras ----------------------------------------
+  buildRail(fi, base) {
+    const f = this.state.frames[fi];
+    const sel = f.bands.find((b) => b.id === f.sel) || f.bands[0];
+    const idx = f.bands.findIndex((b) => b.id === sel.id);
+    const cut = this.isCut(sel.type);
+    const color = this.colorFor(sel.freq);
+
+    const types = [
+      ["hpf", "HP"], ["lowshelf", "LO"], ["bell", "BELL"],
+      ["notch", "NTCH"], ["highshelf", "HI"], ["lpf", "LP"],
+    ];
+    const typeChips = types.map(([key, label]) => ({
+      label, apply: () => this.setType(fi, sel.id, key),
+      style: sel.type === key
+        ? { background: "rgba(94,147,255,0.16)", color: "var(--accent)", border: "1px solid var(--accent-line)" }
+        : { background: "var(--layer-2)", color: "var(--text-3)", border: "1px solid var(--layer-3)" },
+    }));
+
+    const presets = this.presets().map((p) => ({
+      name: p.name, apply: () => this.applyPreset(fi, p.bands),
+      style: f.preset === p.name
+        ? { background: "rgba(139,123,255,0.16)", color: "#b6abff", border: "1px solid rgba(139,123,255,0.45)" }
+        : { background: "var(--layer-1)", color: "var(--text-2)", border: "1px solid var(--layer-3)" },
+    }));
+
+    const gainGrad = sel.gain >= 0 ? "var(--ramp-warm)" : "var(--ramp-cool)";
+
+    return {
+      ...base,
+      selNum: idx + 1, selType: this.typeLabel(sel.type),
+      selDot: { background: color, boxShadow: `0 0 9px ${color}` },
+      typeChips, presets,
+      freq01: this.f01(sel.freq), freqLabel: this.fmtFreq(sel.freq),
+      setFreq: (v) => this.patchBand(fi, sel.id, { freq: this.invF(v) }),
+      gain01: cut ? 0.5 : this.g01(sel.gain),
+      gainLabel: cut ? "—" : this.fmtGain(sel.gain),
+      gainGrad,
+      setGain: cut ? () => {} : (v) => this.patchBand(fi, sel.id, { gain: this.invG(v) }),
+      q01: this.q01(sel.q), qLabel: cut ? (sel.slope || 12) + " dB/oct · Q" + sel.q.toFixed(2) : "Q " + sel.q.toFixed(2),
+      setQ: (v) => this.patchBand(fi, sel.id, { q: this.invQ(v) }),
+      selOnText: sel.on ? "ENABLED" : "BYPASSED",
+      selToggle: () => this.toggleBand(fi, sel.id),
+      selOnStyle: this.pillStyle(sel.on),
+      selOnDot: this.dotStyle(sel.on),
+      selSolo: () => this.soloBand(fi, sel.id),
+      selSoloStyle: sel.solo
+        ? { background: "linear-gradient(180deg,#ffc24b,#ff5fa8)", color: "#1c1a16", border: "1px solid rgba(255,194,75,0.6)" }
+        : { background: "var(--layer-2)", color: "var(--text-2)", border: "1px solid var(--layer-5)" },
+      abA: () => this.setSlot(fi, "A"), abB: () => this.setSlot(fi, "B"),
+      abAStyle: f.slot === "A"
+        ? { background: "var(--accent-grad)", color: "#fff", boxShadow: "0 0 12px rgba(94,147,255,0.4)" }
+        : { background: "transparent", color: "var(--text-3)" },
+      abBStyle: f.slot === "B"
+        ? { background: "var(--accent-grad)", color: "#fff", boxShadow: "0 0 12px rgba(94,147,255,0.4)" }
+        : { background: "transparent", color: "var(--text-3)" },
+    };
+  }
+
+  renderVals() {
+    const b0 = this.buildFrame(0).vm;
+    const b1 = this.buildFrame(1).vm;
+    const b2base = this.buildFrame(2).vm;
+    const b2 = this.buildRail(2, b2base);
+    const N = { w1: 900, w3: 960, pad: 24, wm: 19, dial: 68, out: 66 };
+    return { F0: b0, F1: b1, F2: b2, N };
+  }
+}
+</script>
+</body>
+</html>

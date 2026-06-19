@@ -1,0 +1,376 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/buttons/**",
+              "components/controls/**",
+              "components/surfaces/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Space Grotesk|JetBrains Mono))/i]",
+        "message": "Font not provided by the design system. Available: Space Grotesk, JetBrains Mono."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Badge'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|key|ref|className|style|children)$/]",
+        "message": "<Badge> doesn't accept that prop. Declared props: children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Chip'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|value|color|active|glow|key|ref|className|style|children)$/]",
+        "message": "<Chip> doesn't accept that prop. Declared props: label, value, color, active, glow."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Dial'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|onChange|color|label|size|format|sensitivity|key|ref|className|style|children)$/]",
+        "message": "<Dial> doesn't accept that prop. Declared props: value, onChange, color, label, size, format, sensitivity."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='GlowButton'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|engaged|variant|idleLabel|key|ref|className|style|children)$/]",
+        "message": "<GlowButton> doesn't accept that prop. Declared props: children, engaged, variant, idleLabel."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='GlowButton'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:accent|danger)$/]",
+        "message": "<GlowButton> variant must be one of 'accent' | 'danger'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Keyboard'] > JSXAttribute > JSXIdentifier[name!=/^(?:whites|whiteFill|whitePress|blackFill|blackPress|accent|keyBorder|onPress|onRelease|key|ref|className|style|children)$/]",
+        "message": "<Keyboard> doesn't accept that prop. Declared props: whites, whiteFill, whitePress, blackFill, blackPress, accent, keyBorder, onPress, onRelease."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Knob'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|onChange|size|label|format|unit|sensitivity|key|ref|className|style|children)$/]",
+        "message": "<Knob> doesn't accept that prop. Declared props: value, onChange, size, label, format, unit, sensitivity."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Meter'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|height|gradient|glow|key|ref|className|style|children)$/]",
+        "message": "<Meter> doesn't accept that prop. Declared props: value, height, gradient, glow."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Panel'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|width|pad|radius|key|ref|className|style|children)$/]",
+        "message": "<Panel> doesn't accept that prop. Declared props: children, width, pad, radius."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Slider'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|onChange|label|valueLabel|gradient|key|ref|className|style|children)$/]",
+        "message": "<Slider> doesn't accept that prop. Declared props: value, onChange, label, valueLabel, gradient."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Wordmark'] > JSXAttribute > JSXIdentifier[name!=/^(?:product|color|size|key|ref|className|style|children)$/]",
+        "message": "<Wordmark> doesn't accept that prop. Declared props: product, color, size."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "Badge": {
+        "replaces": []
+      },
+      "Chip": {
+        "replaces": []
+      },
+      "Dial": {
+        "replaces": []
+      },
+      "GlowButton": {
+        "replaces": []
+      },
+      "Keyboard": {
+        "replaces": []
+      },
+      "Knob": {
+        "replaces": []
+      },
+      "Meter": {
+        "replaces": []
+      },
+      "Panel": {
+        "replaces": []
+      },
+      "Slider": {
+        "replaces": []
+      },
+      "Wordmark": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--accent",
+      "--accent-glow",
+      "--accent-grad",
+      "--accent-line",
+      "--accent-soft",
+      "--border-accent",
+      "--border-hairline",
+      "--border-line",
+      "--border-strong",
+      "--button-h",
+      "--danger",
+      "--danger-deep",
+      "--danger-glow",
+      "--danger-grad",
+      "--dial-sm",
+      "--doc-bg",
+      "--doc-card",
+      "--doc-faint",
+      "--doc-hairline",
+      "--doc-ink",
+      "--doc-ink-2",
+      "--doc-ink-3",
+      "--dur-base",
+      "--dur-fast",
+      "--dur-press",
+      "--dur-slow",
+      "--ease",
+      "--font-display",
+      "--font-mono",
+      "--fs-body",
+      "--fs-label",
+      "--fs-label-sm",
+      "--fs-micro",
+      "--fs-readout-l",
+      "--fs-readout-xl",
+      "--fs-tick",
+      "--fs-title",
+      "--fs-value",
+      "--fw-bold",
+      "--fw-medium",
+      "--fw-regular",
+      "--fw-semibold",
+      "--glow-active",
+      "--glow-dot",
+      "--glow-dot-lg",
+      "--glow-meter",
+      "--glow-ring",
+      "--indicator-glow",
+      "--inset-top",
+      "--knob-face",
+      "--knob-hero",
+      "--knob-md",
+      "--layer-1",
+      "--layer-2",
+      "--layer-3",
+      "--layer-4",
+      "--layer-5",
+      "--leading-body",
+      "--leading-snug",
+      "--leading-tight",
+      "--meter-bar",
+      "--panel",
+      "--panel-base",
+      "--panel-top",
+      "--press-shift",
+      "--radius-button",
+      "--radius-button-lg",
+      "--radius-card",
+      "--radius-control",
+      "--radius-full",
+      "--radius-panel",
+      "--radius-pill",
+      "--radius-window",
+      "--ramp-cool",
+      "--ramp-warm",
+      "--shadow-doc",
+      "--shadow-handle",
+      "--shadow-knob",
+      "--shadow-panel",
+      "--shadow-window",
+      "--slider-handle",
+      "--slider-track",
+      "--space-0",
+      "--space-1",
+      "--space-10",
+      "--space-11",
+      "--space-12",
+      "--space-14",
+      "--space-16",
+      "--space-2",
+      "--space-3",
+      "--space-4",
+      "--space-5",
+      "--space-6",
+      "--space-7",
+      "--space-8",
+      "--space-9",
+      "--spectrum-amber",
+      "--spectrum-cyan",
+      "--spectrum-pink",
+      "--spectrum-ramp",
+      "--spectrum-violet",
+      "--sweep-deg",
+      "--text-1",
+      "--text-2",
+      "--text-3",
+      "--text-bright",
+      "--text-faint",
+      "--text-label",
+      "--text-muted",
+      "--track",
+      "--tracking-cap",
+      "--tracking-data",
+      "--tracking-display",
+      "--tracking-label",
+      "--tracking-title",
+      "--tracking-wide",
+      "--well"
+    ],
+    "tokenKinds": {
+      "--spectrum-cyan": "color",
+      "--spectrum-violet": "color",
+      "--spectrum-pink": "color",
+      "--spectrum-amber": "color",
+      "--spectrum-ramp": "color",
+      "--ramp-cool": "color",
+      "--ramp-warm": "color",
+      "--accent": "color",
+      "--accent-soft": "color",
+      "--accent-line": "color",
+      "--accent-glow": "color",
+      "--accent-grad": "color",
+      "--danger": "color",
+      "--danger-deep": "color",
+      "--danger-grad": "color",
+      "--danger-glow": "color",
+      "--panel": "color",
+      "--panel-top": "color",
+      "--panel-base": "color",
+      "--well": "color",
+      "--knob-face": "color",
+      "--layer-1": "color",
+      "--layer-2": "color",
+      "--layer-3": "color",
+      "--layer-4": "color",
+      "--layer-5": "color",
+      "--track": "color",
+      "--text-bright": "font",
+      "--text-1": "font",
+      "--text-2": "font",
+      "--text-3": "font",
+      "--text-muted": "font",
+      "--text-label": "font",
+      "--text-faint": "font",
+      "--doc-bg": "color",
+      "--doc-card": "color",
+      "--doc-ink": "color",
+      "--doc-ink-2": "color",
+      "--doc-ink-3": "color",
+      "--doc-faint": "color",
+      "--doc-hairline": "color",
+      "--font-display": "font",
+      "--font-mono": "font",
+      "--fs-readout-xl": "spacing",
+      "--fs-readout-l": "spacing",
+      "--fs-title": "spacing",
+      "--fs-value": "spacing",
+      "--fs-body": "spacing",
+      "--fs-label": "spacing",
+      "--fs-label-sm": "spacing",
+      "--fs-micro": "spacing",
+      "--fs-tick": "spacing",
+      "--fw-regular": "font",
+      "--fw-medium": "font",
+      "--fw-semibold": "font",
+      "--fw-bold": "font",
+      "--tracking-display": "font",
+      "--tracking-title": "font",
+      "--tracking-label": "font",
+      "--tracking-cap": "font",
+      "--tracking-wide": "font",
+      "--tracking-data": "font",
+      "--leading-tight": "font",
+      "--leading-snug": "font",
+      "--leading-body": "font",
+      "--space-0": "spacing",
+      "--space-1": "spacing",
+      "--space-2": "spacing",
+      "--space-3": "spacing",
+      "--space-4": "spacing",
+      "--space-5": "spacing",
+      "--space-6": "spacing",
+      "--space-7": "spacing",
+      "--space-8": "spacing",
+      "--space-9": "spacing",
+      "--space-10": "spacing",
+      "--space-11": "spacing",
+      "--space-12": "spacing",
+      "--space-14": "spacing",
+      "--space-16": "spacing",
+      "--radius-card": "radius",
+      "--radius-control": "radius",
+      "--radius-button": "radius",
+      "--radius-button-lg": "radius",
+      "--radius-window": "radius",
+      "--radius-panel": "radius",
+      "--radius-pill": "radius",
+      "--radius-full": "radius",
+      "--knob-hero": "spacing",
+      "--knob-md": "spacing",
+      "--dial-sm": "spacing",
+      "--slider-track": "spacing",
+      "--slider-handle": "spacing",
+      "--meter-bar": "spacing",
+      "--button-h": "spacing",
+      "--sweep-deg": "other",
+      "--shadow-panel": "shadow",
+      "--shadow-window": "shadow",
+      "--shadow-knob": "shadow",
+      "--shadow-handle": "shadow",
+      "--shadow-doc": "shadow",
+      "--inset-top": "spacing",
+      "--glow-dot": "shadow",
+      "--glow-dot-lg": "shadow",
+      "--glow-active": "shadow",
+      "--glow-meter": "shadow",
+      "--glow-ring": "shadow",
+      "--indicator-glow": "shadow",
+      "--border-hairline": "other",
+      "--border-line": "other",
+      "--border-strong": "other",
+      "--border-accent": "other",
+      "--ease": "other",
+      "--dur-press": "other",
+      "--dur-fast": "other",
+      "--dur-base": "other",
+      "--dur-slow": "other",
+      "--press-shift": "other"
+    },
+    "fontFamilies": [
+      "JetBrains Mono",
+      "Space Grotesk"
+    ]
+  }
+}

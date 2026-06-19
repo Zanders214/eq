@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/fonts/fonts.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/tokens/effects.css">
+  <link rel="stylesheet" href="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/styles.css">
+  <script src="_ds/neon-plugins-design-system-54a6927b-f60d-4c67-b0ec-c3df07090b3b/_ds_bundle.js"></script>
+  <style>
+    body { margin: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:56px 40px;background:radial-gradient(130% 90% at 50% -10%, #14191f, #050608 70%);font-family:var(--font-display)">
+  <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Panel" width="{{ N.w }}" pad="{{ N.pad }}" hint-size="1080px,600px">
+
+    <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:13px">
+        <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Wordmark" product="EQ" color="#8b7bff" size="{{ N.wm }}" hint-size="130px,26px"></x-import>
+        <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Badge" hint-size="64px,22px">SHAPE</x-import>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:3px;height:32px;padding:3px;border-radius:8px;background:var(--well);border:var(--border-line)">
+          <div style="height:26px;padding:0 14px;border-radius:6px;display:flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F.abAStyle }}" onClick="{{ F.abA }}">A</div>
+          <div style="height:26px;padding:0 14px;border-radius:6px;display:flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F.abBStyle }}" onClick="{{ F.abB }}">B</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:8px;background:var(--well);border:var(--border-line)">
+          <span style="font-size:9px;letter-spacing:0.14em;color:var(--text-label);font-weight:600">OUT</span>
+          <span style="font-family:var(--font-mono);font-size:13px;color:var(--text-1)">{{ F.outLabel }}</span>
+        </div>
+      </div>
+    </header>
+
+    <div style="display:flex;gap:22px;align-items:stretch">
+
+      <!-- LEFT: graph + band strip + presets -->
+      <div style="flex:none">
+        <div style="background:var(--well);border-radius:12px;box-shadow:var(--shadow-window);padding:4px;overflow:hidden">
+          <x-import component="EQGraph" from="./EQGraph.jsx" bands="{{ F.bands }}" selected-id="{{ F.sel }}" on-select="{{ F.onSelect }}" on-change="{{ F.onChange }}" on-add="{{ F.onAdd }}" on-remove="{{ F.onRemove }}" width="{{ N.gw }}" height="{{ N.gh }}" hint-size="720px,440px"></x-import>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:12px">
+          <sc-for list="{{ F.cells }}" as="c" hint-placeholder-count="6">
+            <div onClick="{{ c.select }}" style="flex:1;min-width:0;border-radius:9px;padding:9px 10px;cursor:pointer;transition:all .15s" style="{{ c.cellStyle }}">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                  <span style="width:9px;height:9px;border-radius:50%;flex:none" style="{{ c.dotStyle }}"></span>
+                  <span style="font-size:9px;letter-spacing:0.1em;color:var(--text-label);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.typeLabel }}</span>
+                </div>
+                <div style="width:24px;height:17px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:7.5px;font-weight:700;letter-spacing:0.04em;flex:none" style="{{ c.onStyle }}" onClick="{{ c.toggle }}">{{ c.onText }}</div>
+              </div>
+              <div style="font-family:var(--font-mono);font-size:13px;color:var(--text-1);font-weight:500">{{ c.freqLabel }}</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.subLabel }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:12px">
+          <sc-for list="{{ F.presets }}" as="p" hint-placeholder-count="6">
+            <div style="flex:1;text-align:center;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:0.03em;transition:all .15s" style="{{ p.style }}" onClick="{{ p.apply }}">{{ p.name }}</div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- RIGHT: band editor rail -->
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:12px;height:12px;border-radius:50%" style="{{ F.selDot }}"></span>
+            <span style="font-size:14px;font-weight:600;color:var(--text-1)">BAND {{ F.selNum }}</span>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-3)">{{ F.selType }}</div>
+        </div>
+
+        <div style="display:flex;gap:5px;margin-bottom:18px">
+          <sc-for list="{{ F.typeChips }}" as="t" hint-placeholder-count="6">
+            <div style="flex:1;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;font-size:9px;font-weight:600;letter-spacing:0.05em;transition:all .15s" style="{{ t.style }}" onClick="{{ t.apply }}">{{ t.label }}</div>
+          </sc-for>
+        </div>
+
+        <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Slider" value="{{ F.freq01 }}" onChange="{{ F.setFreq }}" label="FREQUENCY" valueLabel="{{ F.freqLabel }}" gradient="var(--ramp-cool)" hint-size="100%,42px" style="margin-bottom:16px"></x-import>
+        <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Slider" value="{{ F.gain01 }}" onChange="{{ F.setGain }}" label="GAIN" valueLabel="{{ F.gainLabel }}" gradient="{{ F.gainGrad }}" hint-size="100%,42px" style="margin-bottom:16px"></x-import>
+        <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Slider" value="{{ F.q01 }}" onChange="{{ F.setQ }}" label="Q / SLOPE" valueLabel="{{ F.qLabel }}" gradient="var(--ramp-warm)" hint-size="100%,42px" style="margin-bottom:18px"></x-import>
+
+        <div style="display:flex;gap:6px;margin-bottom:20px">
+          <div style="flex:1;height:36px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:8px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F.selOnStyle }}" onClick="{{ F.selToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F.selOnDot }}"></span>{{ F.selOnText }}</div>
+          <div style="flex:1;height:36px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:8px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:0.1em;transition:all .15s" style="{{ F.selSoloStyle }}" onClick="{{ F.selSolo }}">SOLO</div>
+        </div>
+
+        <div style="border-top:var(--border-line);margin-top:auto;padding-top:18px;display:flex;align-items:center;gap:18px">
+          <x-import component-from-global-scope="NeonPluginsDesignSystem_54a692.Dial" value="{{ F.output01 }}" onChange="{{ F.setOutput }}" color="var(--accent)" label="OUTPUT" size="{{ N.out }}" format="{{ F.outDialFormat }}" hint-size="72px,96px"></x-import>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.12em;transition:all .15s" style="{{ F.modeStyle }}" onClick="{{ F.modeToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F.modeDot }}"></span>{{ F.modeLabel }}</div>
+            <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:8px;cursor:pointer;user-select:none;font-size:10px;font-weight:700;letter-spacing:0.12em;transition:all .15s" style="{{ F.hqStyle }}" onClick="{{ F.hqToggle }}"><span style="width:8px;height:8px;border-radius:2px" style="{{ F.hqDot }}"></span>HQ OVERSAMPLING</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { frames: [this.mkFrame()] };
+  }
+
+  defaultBands() {
+    return [
+      { id: 0, type: "hpf", freq: 30, gain: 0, q: 0.71, slope: 24, on: true, solo: false },
+      { id: 1, type: "bell", freq: 95, gain: 3.2, q: 0.9, on: true, solo: false },
+      { id: 2, type: "bell", freq: 420, gain: -3.8, q: 1.5, on: true, solo: false },
+      { id: 3, type: "bell", freq: 2600, gain: 2.6, q: 1.1, on: true, solo: false },
+      { id: 4, type: "highshelf", freq: 8200, gain: 3.6, q: 0.7, on: true, solo: false },
+      { id: 5, type: "lpf", freq: 19000, gain: 0, q: 0.71, slope: 12, on: true, solo: false },
+    ];
+  }
+  mkFrame() {
+    return { bands: this.defaultBands(), other: this.defaultBands(), slot: "A", sel: 3, next: 6, output: 0.5, mode: "STEREO", hq: true };
+  }
+
+  rampColor(t) {
+    const RAMP = [[52, 216, 255], [139, 123, 255], [255, 95, 168], [255, 194, 75]];
+    t = Math.min(1, Math.max(0, t));
+    const seg = t * 3, i = Math.min(2, Math.floor(seg)), f = seg - i;
+    const a = RAMP[i], b = RAMP[i + 1];
+    const c = (k) => Math.round(a[k] + (b[k] - a[k]) * f);
+    return `rgb(${c(0)},${c(1)},${c(2)})`;
+  }
+  colorFor(freq) { return this.rampColor(Math.log(freq / 20) / Math.log(1000)); }
+  f01(f) { return Math.log(f / 20) / Math.log(1000); }
+  invF(x) { return 20 * Math.pow(1000, Math.min(1, Math.max(0, x))); }
+  q01(q) { return Math.log(q / 0.1) / Math.log(180); }
+  invQ(x) { return 0.1 * Math.pow(180, Math.min(1, Math.max(0, x))); }
+  g01(g) { return (g + 18) / 36; }
+  invG(x) { return Math.min(1, Math.max(0, x)) * 36 - 18; }
+  isCut(t) { return t === "hpf" || t === "lpf" || t === "notch"; }
+  fmtFreq(f) { return f < 1000 ? Math.round(f) + " Hz" : (f / 1000).toFixed(f < 10000 ? 2 : 1) + " kHz"; }
+  fmtGain(g) { return (g >= 0 ? "+" : "") + g.toFixed(1) + " dB"; }
+  typeLabel(t) { return { hpf: "HI-PASS", lpf: "LO-PASS", notch: "NOTCH", bell: "BELL", lowshelf: "LO SHELF", highshelf: "HI SHELF" }[t] || t; }
+
+  updateFrame(fn) {
+    this.setState((s) => { const f = { ...s.frames[0] }; fn(f); return { frames: [f] }; });
+  }
+  patchBand(id, patch) { this.updateFrame((f) => { f.bands = f.bands.map((b) => (b.id === id ? { ...b, ...patch } : b)); }); }
+  selectBand(id) { this.updateFrame((f) => { f.sel = id; }); }
+  toggleBand(id) { this.updateFrame((f) => { f.bands = f.bands.map((b) => (b.id === id ? { ...b, on: !b.on } : b)); }); }
+  soloBand(id) { this.updateFrame((f) => { f.bands = f.bands.map((b) => (b.id === id ? { ...b, solo: !b.solo } : b)); }); }
+  setType(id, type) {
+    this.updateFrame((f) => {
+      f.bands = f.bands.map((b) => { if (b.id !== id) return b; const nb = { ...b, type }; if (this.isCut(type) && !b.slope) nb.slope = 24; return nb; });
+      f.sel = id;
+    });
+  }
+  addBand(freq) { this.updateFrame((f) => { const id = f.next; f.bands = f.bands.concat({ id, type: "bell", freq, gain: 0, q: 1.0, on: true, solo: false }); f.next = id + 1; f.sel = id; }); }
+  removeBand(id) { this.updateFrame((f) => { if (f.bands.length <= 1) return; f.bands = f.bands.filter((b) => b.id !== id); if (f.sel === id) f.sel = f.bands[0].id; }); }
+  setOutput(v) { this.updateFrame((f) => { f.output = v; }); }
+  toggleMode() { this.updateFrame((f) => { f.mode = f.mode === "STEREO" ? "M/S" : "STEREO"; }); }
+  toggleHq() { this.updateFrame((f) => { f.hq = !f.hq; }); }
+  setSlot(slot) { this.updateFrame((f) => { if (f.slot === slot) return; const cur = f.bands; f.bands = f.other; f.other = cur; f.slot = slot; f.sel = f.bands[0] ? f.bands[0].id : 0; }); }
+  applyPreset(bands) {
+    this.updateFrame((f) => {
+      f.bands = bands.map((b) => ({ q: 0.9, gain: 0, solo: false, on: true, ...b }));
+      f.preset = bands.__name; f.sel = f.bands[Math.min(1, f.bands.length - 1)].id; f.next = Math.max(...f.bands.map((b) => b.id)) + 1;
+    });
+  }
+
+  presets() {
+    const P = (name, bands) => { bands.__name = name; return { name, bands }; };
+    return [
+      P("Flat", [ { id: 0, type: "hpf", freq: 24, slope: 12 }, { id: 1, type: "bell", freq: 200, gain: 0 }, { id: 2, type: "bell", freq: 1000, gain: 0 }, { id: 3, type: "bell", freq: 5000, gain: 0 } ]),
+      P("Vocal Air", [ { id: 0, type: "hpf", freq: 80, slope: 24 }, { id: 1, type: "bell", freq: 320, gain: -2.5, q: 1.4 }, { id: 2, type: "bell", freq: 3000, gain: 2.0, q: 0.9 }, { id: 3, type: "highshelf", freq: 11000, gain: 4.5, q: 0.7 } ]),
+      P("De-Mud", [ { id: 0, type: "hpf", freq: 45, slope: 24 }, { id: 1, type: "bell", freq: 280, gain: -5.0, q: 1.8 }, { id: 2, type: "bell", freq: 500, gain: -2.5, q: 1.2 }, { id: 3, type: "highshelf", freq: 9000, gain: 1.8, q: 0.7 } ]),
+      P("Bass Tight", [ { id: 0, type: "hpf", freq: 32, slope: 48 }, { id: 1, type: "bell", freq: 70, gain: 3.0, q: 1.0 }, { id: 2, type: "bell", freq: 220, gain: -3.5, q: 1.6 }, { id: 3, type: "lowshelf", freq: 110, gain: 1.5, q: 0.7 } ]),
+      P("Lo-Fi", [ { id: 0, type: "hpf", freq: 180, slope: 24 }, { id: 1, type: "bell", freq: 900, gain: 4.0, q: 0.8 }, { id: 2, type: "lpf", freq: 4200, slope: 24 } ]),
+      P("Bright", [ { id: 0, type: "bell", freq: 400, gain: -1.5, q: 1.0 }, { id: 1, type: "bell", freq: 4000, gain: 2.5, q: 0.9 }, { id: 2, type: "highshelf", freq: 10000, gain: 5.0, q: 0.7 } ]),
+    ];
+  }
+
+  pillStyle(active, danger) {
+    const grad = danger ? "linear-gradient(180deg,#ff5a5a,#e23b3b)" : "linear-gradient(180deg,#5e93ff,#8b7bff)";
+    const glow = danger ? "0 0 16px rgba(255,80,80,0.45)" : "0 0 16px rgba(94,147,255,0.45)";
+    const bd = danger ? "rgba(255,120,120,0.6)" : "rgba(150,170,255,0.6)";
+    return active
+      ? { background: grad, color: "#fff", border: `1px solid ${bd}`, boxShadow: glow }
+      : { background: "var(--layer-2)", color: "var(--text-2)", border: "1px solid var(--layer-5)", boxShadow: "var(--inset-top)" };
+  }
+  dotStyle(active, danger) {
+    const c = active ? "#fff" : (danger ? "rgba(255,90,90,0.8)" : "rgba(94,147,255,0.8)");
+    return { background: c, boxShadow: `0 0 8px ${c}` };
+  }
+
+  renderVals() {
+    const f = this.state.frames[0];
+    const hasSolo = f.bands.some((b) => b.solo);
+    const outDb = (f.output - 0.5) * 48;
+    const outLabel = (outDb >= 0 ? "+" : "") + outDb.toFixed(1) + " dB";
+    const display = f.bands.map((b, idx) => ({ ...b, num: idx + 1, color: this.colorFor(b.freq), on: b.on && (!hasSolo || b.solo) }));
+
+    const cells = f.bands.map((b, idx) => {
+      const color = this.colorFor(b.freq);
+      const cut = this.isCut(b.type);
+      const selected = b.id === f.sel;
+      const live = b.on && (!hasSolo || b.solo);
+      return {
+        id: b.id, num: idx + 1, color, typeLabel: this.typeLabel(b.type), freqLabel: this.fmtFreq(b.freq),
+        subLabel: cut ? (b.slope || 12) + " dB/oct" : this.fmtGain(b.gain) + " · Q" + b.q.toFixed(1),
+        onText: b.on ? "ON" : "OFF",
+        select: () => this.selectBand(b.id), toggle: () => this.toggleBand(b.id),
+        dotStyle: { background: color, boxShadow: `0 0 8px ${color}`, opacity: live ? 1 : 0.3 },
+        cellStyle: { background: selected ? "rgba(94,147,255,0.10)" : "var(--layer-1)", border: selected ? "1px solid rgba(94,147,255,0.45)" : "1px solid var(--layer-3)", opacity: b.on ? 1 : 0.55 },
+        onStyle: b.on
+          ? { background: "rgba(94,147,255,0.18)", color: "var(--accent)", border: "1px solid var(--accent-line)" }
+          : { background: "var(--layer-2)", color: "var(--text-label)", border: "1px solid var(--layer-3)" },
+      };
+    });
+
+    const sel = f.bands.find((b) => b.id === f.sel) || f.bands[0];
+    const selIdx = f.bands.findIndex((b) => b.id === sel.id);
+    const cut = this.isCut(sel.type);
+    const selColor = this.colorFor(sel.freq);
+    const types = [["hpf", "HP"], ["lowshelf", "LO"], ["bell", "BELL"], ["notch", "NTCH"], ["highshelf", "HI"], ["lpf", "LP"]];
+    const typeChips = types.map(([key, label]) => ({
+      label, apply: () => this.setType(sel.id, key),
+      style: sel.type === key
+        ? { background: "rgba(94,147,255,0.16)", color: "var(--accent)", border: "1px solid var(--accent-line)" }
+        : { background: "var(--layer-2)", color: "var(--text-3)", border: "1px solid var(--layer-3)" },
+    }));
+    const presets = this.presets().map((p) => ({
+      name: p.name, apply: () => this.applyPreset(p.bands),
+      style: f.preset === p.name
+        ? { background: "rgba(139,123,255,0.16)", color: "#b6abff", border: "1px solid rgba(139,123,255,0.45)" }
+        : { background: "var(--layer-1)", color: "var(--text-2)", border: "1px solid var(--layer-3)" },
+    }));
+
+    const N = { w: 1080, pad: 26, wm: 21, gw: 720, gh: 440, out: 72 };
+
+    const F = {
+      bands: display, sel: f.sel, cells, presets, typeChips,
+      outLabel, output01: f.output,
+      onSelect: (id) => this.selectBand(id), onChange: (id, patch) => this.patchBand(id, patch),
+      onAdd: (freq) => this.addBand(freq), onRemove: (id) => this.removeBand(id),
+      selNum: selIdx + 1, selType: this.typeLabel(sel.type),
+      selDot: { background: selColor, boxShadow: `0 0 9px ${selColor}` },
+      freq01: this.f01(sel.freq), freqLabel: this.fmtFreq(sel.freq),
+      setFreq: (v) => this.patchBand(sel.id, { freq: this.invF(v) }),
+      gain01: cut ? 0.5 : this.g01(sel.gain), gainLabel: cut ? "—" : this.fmtGain(sel.gain),
+      gainGrad: sel.gain >= 0 ? "var(--ramp-warm)" : "var(--ramp-cool)",
+      setGain: cut ? () => {} : (v) => this.patchBand(sel.id, { gain: this.invG(v) }),
+      q01: this.q01(sel.q), qLabel: cut ? (sel.slope || 12) + " dB/oct · Q" + sel.q.toFixed(2) : "Q " + sel.q.toFixed(2),
+      setQ: (v) => this.patchBand(sel.id, { q: this.invQ(v) }),
+      selOnText: sel.on ? "ENABLED" : "BYPASSED",
+      selToggle: () => this.toggleBand(sel.id), selOnStyle: this.pillStyle(sel.on), selOnDot: this.dotStyle(sel.on),
+      selSolo: () => this.soloBand(sel.id),
+      selSoloStyle: sel.solo
+        ? { background: "linear-gradient(180deg,#ffc24b,#ff5fa8)", color: "#1c1a16", border: "1px solid rgba(255,194,75,0.6)" }
+        : { background: "var(--layer-2)", color: "var(--text-2)", border: "1px solid var(--layer-5)" },
+      setOutput: (v) => this.setOutput(v),
+      outDialFormat: (v) => { const d = (v - 0.5) * 48; return (d >= 0 ? "+" : "") + d.toFixed(0); },
+      modeLabel: f.mode === "STEREO" ? "STEREO" : "MID/SIDE",
+      modeToggle: () => this.toggleMode(), modeStyle: this.pillStyle(f.mode !== "STEREO"), modeDot: this.dotStyle(f.mode !== "STEREO"),
+      hqToggle: () => this.toggleHq(), hqStyle: this.pillStyle(f.hq), hqDot: this.dotStyle(f.hq),
+      abA: () => this.setSlot("A"), abB: () => this.setSlot("B"),
+      abAStyle: f.slot === "A" ? { background: "var(--accent-grad)", color: "#fff", boxShadow: "0 0 12px rgba(94,147,255,0.4)" } : { background: "transparent", color: "var(--text-3)" },
+      abBStyle: f.slot === "B" ? { background: "var(--accent-grad)", color: "#fff", boxShadow: "0 0 12px rgba(94,147,255,0.4)" } : { background: "transparent", color: "var(--text-3)" },
+    };
+    return { F, N };
+  }
+}
+</script>
+</body>
+</html>

@@ -60,6 +60,7 @@ to an LUFS/K-weighted measure.
 ## Smaller polish
 - Piano-key / note readout next to the frequency value.
 - Per-band bypass via right-click on a node; alt-drag to constrain to gain-only.
-- Resizable / scalable UI (the panel is currently fixed at 1100×690).
+- Resizable / scalable UI (the panel is currently fixed at 1100×772).
 - Undo/redo via `UndoManager` on the APVTS.
-- `pluginval` strictness level 10 in CI.
+- ✅ CI: GitHub Actions builds + runs the unit tests + `pluginval` strictness 10 on every push
+  (`.github/workflows/ci.yml`). Follow-up: macOS/Windows runners; pin pluginval; LTO-off on PRs.

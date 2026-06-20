@@ -1,5 +1,7 @@
 # ZandersEQ
 
+[![CI](https://github.com/zanders214/eq/actions/workflows/ci.yml/badge.svg)](https://github.com/zanders214/eq/actions/workflows/ci.yml)
+
 A FabFilter Pro-Q-style **parametric EQ audio plugin** for DAWs (VST3 / AU / Standalone),
 built with [JUCE](https://juce.com). The hero is a live frequency-response curve with a
 real-time FFT spectrum behind it; you drag band nodes on the curve and refine them in the

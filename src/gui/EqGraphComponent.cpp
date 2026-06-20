@@ -583,13 +583,14 @@ void EqGraphComponent::finishCapture()
 {
     proc.setCapturing (false);
 
+    const int minFrames = 8;   // need a representative span, not a momentary blip
     std::array<float, kMatchBins> mean {};
-    if (capFramesSrc > 0)
+    if (capFramesSrc >= minFrames)
     {
         for (int k = 0; k < kMatchBins; ++k) mean[(size_t) k] = (float) (accumSrc[(size_t) k] / capFramesSrc);
         proc.storeCaptureCurve (ZandersEqAudioProcessor::CaptureSlot::source, mean.data(), kMatchBins);
     }
-    if (capFramesRef > 0)
+    if (capFramesRef >= minFrames)
     {
         double energy = 0.0;
         for (int k = 0; k < kMatchBins; ++k) { mean[(size_t) k] = (float) (accumRef[(size_t) k] / capFramesRef); energy += mean[(size_t) k]; }

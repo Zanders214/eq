@@ -307,6 +307,7 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
             else
             {
                 bands[(size_t) i].dynGainDb = 0.0f;
+                bands[(size_t) i].env = 0.0f;   // restart clean when dynamics are re-enabled
                 dynGainDisplay[(size_t) i].store (0.0f);
             }
 
@@ -320,6 +321,8 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
             float* R = channels[1];
             for (int s = pos; s < pos + len; ++s)
             {
+                // detector keys off the pre-EQ input (mono), independent of band order/domain
+                const float det = 0.5f * (L[s] + R[s]);
                 // canonical lane pair for the whole chain: L/R, or M/S (encoded once)
                 float a = ms ? 0.5f * (L[s] + R[s]) : L[s];
                 float b = ms ? 0.5f * (L[s] - R[s]) : R[s];
@@ -327,7 +330,7 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
                     if (bands[(size_t) i].active)
                     {
                         if (dyn[(size_t) i])
-                            bands[(size_t) i].pushDetector (0.5f * (a + b)); // detect on the band's input
+                            bands[(size_t) i].pushDetector (det);
                         applyBand (bands[(size_t) i], lane[(size_t) i], a, b);
                     }
                 if (ms) { L[s] = a + b; R[s] = a - b; }
@@ -339,12 +342,13 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
             float* M = channels[0];
             for (int s = pos; s < pos + len; ++s)
             {
+                const float in = M[s];   // detect on the pre-EQ input
                 float x = M[s];
                 for (int i = 0; i < numBands; ++i)
                     if (bands[(size_t) i].active)
                     {
                         if (dyn[(size_t) i])
-                            bands[(size_t) i].pushDetector (x);
+                            bands[(size_t) i].pushDetector (in);
                         x = bands[(size_t) i].processSample (0, x);
                     }
                 M[s] = x;

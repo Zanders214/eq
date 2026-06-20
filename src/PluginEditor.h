@@ -24,6 +24,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
+    bool keyPressed (const juce::KeyPress&) override;
 
 private:
     void timerCallback() override;
@@ -37,7 +38,7 @@ private:
     PresetBar        presetBar;
     BandEditorRail   rail;
 
-    juce::Rectangle<int> headerBounds, wellBounds, abA, abB;
+    juce::Rectangle<int> headerBounds, wellBounds, abA, abB, undoBtn, redoBtn;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EqContent)
 };

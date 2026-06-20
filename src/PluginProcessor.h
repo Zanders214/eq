@@ -98,6 +98,15 @@ public:
     juce::String getCurrentSlot() const          { return abSlot; }
     void toggleABSlot (const juce::String& slot); // swaps the live params with the stored A/B snapshot
 
+    // --- Undo/redo (whole-parameter snapshots; message-thread only) -----------
+    void beginUndoTransaction();                          // capture the pre-edit state
+    void commitUndoTransaction();                         // push it iff the edit changed anything
+    void recordUndoableEdit (std::function<void()> edit); // begin + edit + commit, for discrete edits
+    bool canUndo() const noexcept { return ! undoStack.empty(); }
+    bool canRedo() const noexcept { return ! redoStack.empty(); }
+    void undo();
+    void redo();
+
     static juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() { return createParameterLayout(); }
 
 private:
@@ -161,6 +170,14 @@ private:
     int              editorWidth { 1100 };       // persisted UI size (message-thread)
     juce::String     abSlot { "A" };
     juce::ValueTree  abStored { "ABOther" }; // snapshot of the inactive slot
+
+    // Undo/redo: stacks of full parameter snapshots (shares the A/B capture/restore).
+    juce::ValueTree              pendingUndo;
+    std::vector<juce::ValueTree> undoStack, redoStack;
+    static constexpr int         maxUndo = 64;
+    void            snapshotInto (juce::ValueTree& dest) const; // fill dest with every param's value
+    juce::ValueTree captureParams() const;
+    void            applyParams (const juce::ValueTree& snapshot);
 
     static constexpr int controlBlock = 32;  // coeff refresh granularity (samples)
 

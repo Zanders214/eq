@@ -14,6 +14,7 @@
 // never created, so the test runs headless with no message thread or display.
 
 #include "PluginProcessor.h"
+#include "gui/Theme.h"   // noteName()
 
 #include <cmath>
 #include <cstdio>
@@ -429,6 +430,65 @@ int main()
         p.prepareToPlay (sr, blockSize);
         const double peak = maxAbsUnderNoise (p, 200);
         check (std::isfinite (peak) && peak < 100.0, "busy config (HQ + auto-gain) stays finite", peak);
+    }
+
+    // --- 10. Undo / redo of parameter edits --------------------------------
+    // Drive edits through the parameter objects (setValueNotifyingHost) so the
+    // snapshot's getValue() reads stay consistent with the atomics processBlock sees.
+    {
+        ZandersEqAudioProcessor p;
+        auto setNorm = [&] (const juce::String& id, float real)
+        {
+            if (auto* pp = p.getApvts().getParameter (id))
+                pp->setValueNotifyingHost (pp->convertTo0to1 (real));
+        };
+        auto raw = [&] (const juce::String& id) { return (double) p.getApvts().getRawParameterValue (id)->load(); };
+
+        setNorm (ids::gain (0), 0.0f);
+        check (! p.canUndo(), "no undo history at start");
+
+        p.beginUndoTransaction();
+        setNorm (ids::gain (0), 6.0f);
+        p.commitUndoTransaction();
+        check (p.canUndo(),                      "an edit creates an undo entry");
+        check (within (raw (ids::gain (0)), 6.0, 0.02), "edit applied", raw (ids::gain (0)));
+
+        p.undo();
+        check (within (raw (ids::gain (0)), 0.0, 0.02), "undo restores the old value", raw (ids::gain (0)));
+        check (p.canRedo(),                      "undo enables redo");
+        p.redo();
+        check (within (raw (ids::gain (0)), 6.0, 0.02), "redo re-applies the value", raw (ids::gain (0)));
+
+        // no-op gesture adds nothing
+        ZandersEqAudioProcessor p2;
+        p2.beginUndoTransaction();
+        p2.commitUndoTransaction();
+        check (! p2.canUndo(), "a no-op gesture leaves history empty");
+
+        // a fresh edit clears the redo stack
+        p.beginUndoTransaction();
+        setNorm (ids::q (0), 4.0f);
+        p.commitUndoTransaction();
+        check (! p.canRedo(), "a fresh edit clears redo");
+
+        // a multi-parameter edit undoes in a single step
+        const double f0 = raw (ids::freq (0));
+        p.recordUndoableEdit ([&]
+        {
+            setNorm (ids::freq (0), 777.0f);
+            setNorm (ids::on (1), 1.0f);
+        });
+        check (within (raw (ids::freq (0)), 777.0, 0.5), "multi-edit applied", raw (ids::freq (0)));
+        p.undo();
+        check (within (raw (ids::freq (0)), f0, 0.5), "multi-param edit undoes in one step", raw (ids::freq (0)));
+    }
+
+    // --- 11. Musical-note readout ------------------------------------------
+    {
+        check (theme::noteName (440.0f)  == "A4",  "noteName(440) == A4");
+        check (theme::noteName (261.63f) == "C4",  "noteName(261.63) == C4");
+        check (theme::noteName (1000.0f) == "B5",  "noteName(1000) == B5", 0.0);
+        check (theme::noteName (27.5f)   == "A0",  "noteName(27.5) == A0");
     }
 
     std::printf ("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED",

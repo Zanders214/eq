@@ -369,6 +369,23 @@ void EqGraphComponent::drawNodes (juce::Graphics& g)
 // ---- interaction ------------------------------------------------------------
 void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // right-click (or ctrl-click) a node to bypass / un-bypass that band
+    if (e.mods.isPopupMenu())
+    {
+        const int b = nodeAtPosition (e.position);
+        if (b >= 0)
+        {
+            const bool on = apvts.getRawParameterValue (ids::on (b))->load() > 0.5f;
+            proc.recordUndoableEdit ([&] { setBool (ids::on (b), ! on); });
+            if (b != proc.getSelectedBand()) proc.setSelectedBand (b);
+            if (onSelectionChanged) onSelectionChanged();
+            repaint();
+        }
+        return;
+    }
+
+    proc.beginUndoTransaction();   // bracket whatever drag gesture begins below
+
     // dynamic-range handle takes priority over the node beneath it
     const int rh = rangeHandleAt (e.position);
     if (rh >= 0)
@@ -435,7 +452,8 @@ void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
     if (dragBand < 0) return;
     const float x = juce::jlimit (0.0f, w, e.position.x);
     const float y = juce::jlimit (0.0f, h, e.position.y);
-    setParam (ids::freq (dragBand), juce::jlimit (fMin, fMax, xToFreq (x, w)));
+    if (! e.mods.isAltDown())      // Alt-drag constrains to gain-only (frequency held)
+        setParam (ids::freq (dragBand), juce::jlimit (fMin, fMax, xToFreq (x, w)));
     if (draggingGain)
         setParam (ids::gain (dragBand), juce::jlimit (-18.0f, 18.0f, yToGain (y, h)));
 }
@@ -443,17 +461,21 @@ void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 void EqGraphComponent::mouseUp (const juce::MouseEvent&)
 {
     pendingGrab = false;
-    if (dragBand < 0) return;
-    if (draggingRange)
+    if (dragBand >= 0)
     {
-        endGesture (ids::dynRange (dragBand));
-        draggingRange = false;
+        if (draggingRange)
+        {
+            endGesture (ids::dynRange (dragBand));
+            draggingRange = false;
+        }
+        else
+        {
+            endGesture (ids::freq (dragBand));
+            if (draggingGain) endGesture (ids::gain (dragBand));
+        }
         dragBand = -1;
-        return;
     }
-    endGesture (ids::freq (dragBand));
-    if (draggingGain) endGesture (ids::gain (dragBand));
-    dragBand = -1;
+    proc.commitUndoTransaction();   // one undo step per drag (no-op for a plain click)
 }
 
 void EqGraphComponent::mouseDoubleClick (const juce::MouseEvent& e)
@@ -465,7 +487,7 @@ void EqGraphComponent::mouseDoubleClick (const juce::MouseEvent& e)
         for (int i = 0; i < numBands; ++i)
             if (apvts.getRawParameterValue (ids::on (i))->load() > 0.5f) ++onCount;
         if (onCount > 1)
-            setBool (ids::on (b), false);   // "remove" = disable
+            proc.recordUndoableEdit ([&] { setBool (ids::on (b), false); });   // "remove" = disable
     }
     else
     {
@@ -474,11 +496,14 @@ void EqGraphComponent::mouseDoubleClick (const juce::MouseEvent& e)
             if (apvts.getRawParameterValue (ids::on (i))->load() <= 0.5f)
             {
                 const float f = juce::jlimit (fMin, fMax, xToFreq (e.position.x, (float) getWidth()));
-                setChoice (ids::type (i), (int) FilterType::bell);
-                setParam (ids::freq (i), f);
-                setParam (ids::gain (i), 0.0f);
-                setParam (ids::q (i), 1.0f);
-                setBool (ids::on (i), true);    // "add" = enable a spare band
+                proc.recordUndoableEdit ([&]
+                {
+                    setChoice (ids::type (i), (int) FilterType::bell);
+                    setParam (ids::freq (i), f);
+                    setParam (ids::gain (i), 0.0f);
+                    setParam (ids::q (i), 1.0f);
+                    setBool (ids::on (i), true);    // "add" = enable a spare band
+                });
                 proc.setSelectedBand (i);
                 if (onSelectionChanged) onSelectionChanged();
                 break;
@@ -493,7 +518,7 @@ void EqGraphComponent::mouseWheelMove (const juce::MouseEvent& e, const juce::Mo
     if (b < 0) return;
     const float factor = w.deltaY > 0 ? 1.12f : 1.0f / 1.12f;
     const float q = juce::jlimit (0.1f, 18.0f, apvts.getRawParameterValue (ids::q (b))->load() * factor);
-    setParam (ids::q (b), q);
+    proc.recordUndoableEdit ([&] { setParam (ids::q (b), q); });
 }
 
 // ---- animation --------------------------------------------------------------
@@ -608,6 +633,7 @@ void EqGraphComponent::runMatch()
     const auto res = fitMatch (proc.getReferenceCurve(), proc.getSourceCurve(),
                                kMatchBins, proc.getActiveSampleRate(), amount);
 
+    proc.beginUndoTransaction();   // the whole match is a single undo step
     int firstUsed = -1;
     for (int i = 0; i < numBands; ++i)
     {
@@ -630,6 +656,7 @@ void EqGraphComponent::runMatch()
         endGesture (ids::type (i)); endGesture (ids::freq (i)); endGesture (ids::gain (i));
         endGesture (ids::q (i));    endGesture (ids::slope (i)); endGesture (ids::on (i));
     }
+    proc.commitUndoTransaction();
 
     if (firstUsed >= 0)
     {

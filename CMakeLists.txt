@@ -105,8 +105,39 @@ if(ZEQ_BUILD_TESTS)
     add_executable(ZandersEQDynamicsTests tests/DynamicsTests.cpp)
     target_compile_features(ZandersEQDynamicsTests PRIVATE cxx_std_17)
 
+    # Integration harness: drives the REAL processBlock, so it compiles the engine +
+    # GUI sources and the JUCE modules straight into the test exe (it does NOT link the
+    # ZandersEQ shared-code lib, which would double-consume the JUCE modules). The GUI
+    # sources + ZandersEQData are needed only because PluginProcessor's compiled
+    # createEditor() references ZandersEqEditor — no window is ever opened at runtime.
+    add_executable(ZandersEQEngineTests
+        tests/EngineTests.cpp
+        src/PluginProcessor.cpp
+        src/PluginEditor.cpp
+        src/gui/NeonLookAndFeel.cpp
+        src/gui/EqGraphComponent.cpp
+        src/gui/BandStrip.cpp
+        src/gui/PresetBar.cpp
+        src/gui/BandEditorRail.cpp)
+    target_include_directories(ZandersEQEngineTests PRIVATE src)
+    target_compile_definitions(ZandersEQEngineTests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_REPORT_APP_USAGE=0)
+    target_link_libraries(ZandersEQEngineTests PRIVATE
+        ZandersEQData
+        juce::juce_audio_utils
+        juce::juce_audio_processors
+        juce::juce_dsp
+        juce::juce_gui_extra
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
     enable_testing()
     add_test(NAME MatchFitTests COMMAND ZandersEQTests)
     add_test(NAME ChannelRoutingTests COMMAND ZandersEQRoutingTests)
     add_test(NAME DynamicsTests COMMAND ZandersEQDynamicsTests)
+    add_test(NAME EngineTests COMMAND ZandersEQEngineTests)
 endif()

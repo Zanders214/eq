@@ -11,9 +11,9 @@ static float textWidth (const juce::Font& f, const juce::String& s)
     return ga.getBoundingBox (0, -1, true).getWidth();
 }
 
-ZandersEqEditor::ZandersEqEditor (ZandersEqAudioProcessor& p)
-    : juce::AudioProcessorEditor (p), proc (p),
-      graph (p), strip (p), presetBar (p), rail (p)
+// ============================ EqContent (the UI) ============================
+EqContent::EqContent (ZandersEqAudioProcessor& p)
+    : proc (p), graph (p), strip (p), presetBar (p), rail (p)
 {
     setLookAndFeel (&lnf);
 
@@ -26,18 +26,18 @@ ZandersEqEditor::ZandersEqEditor (ZandersEqAudioProcessor& p)
     graph.onSelectionChanged = rebind;
     strip.onSelectionChanged = rebind;
     presetBar.onPresetApplied = [this] { rail.refresh(); graph.repaint(); strip.repaint(); };
+    rail.onCapture = [this] { graph.toggleCapture(); };
+    rail.onMatch   = [this] { graph.runMatch(); strip.repaint(); rail.refresh(); graph.repaint(); };
 
-    setSize (1100, 690);
-    setResizable (false, false);
     startTimerHz (60);
 }
 
-ZandersEqEditor::~ZandersEqEditor()
+EqContent::~EqContent()
 {
     setLookAndFeel (nullptr);
 }
 
-void ZandersEqEditor::timerCallback()
+void EqContent::timerCallback()
 {
     graph.updateAnimation();
     graph.repaint();
@@ -47,7 +47,7 @@ void ZandersEqEditor::timerCallback()
     repaint (headerBounds);
 }
 
-void ZandersEqEditor::resized()
+void EqContent::resized()
 {
     auto panel = getLocalBounds().reduced (12);
     auto content = panel.reduced (24);
@@ -76,7 +76,7 @@ void ZandersEqEditor::resized()
     abB = ab;
 }
 
-void ZandersEqEditor::paint (juce::Graphics& g)
+void EqContent::paint (juce::Graphics& g)
 {
     // dark stage
     g.setGradientFill (juce::ColourGradient (stageTop, (float) getWidth() * 0.5f, -40.0f,
@@ -105,7 +105,7 @@ void ZandersEqEditor::paint (juce::Graphics& g)
     drawHeader (g);
 }
 
-void ZandersEqEditor::drawHeader (juce::Graphics& g)
+void EqContent::drawHeader (juce::Graphics& g)
 {
     auto hr = headerBounds;
 
@@ -170,10 +170,43 @@ void ZandersEqEditor::drawHeader (juce::Graphics& g)
     drawAB (abB, "B", ! isA);
 }
 
-void ZandersEqEditor::mouseDown (const juce::MouseEvent& e)
+void EqContent::mouseDown (const juce::MouseEvent& e)
 {
     if (abA.contains (e.getPosition())) { proc.toggleABSlot ("A"); rail.bindToSelected(); repaint(); }
     else if (abB.contains (e.getPosition())) { proc.toggleABSlot ("B"); rail.bindToSelected(); repaint(); }
+}
+
+// ============================ ZandersEqEditor (host) ========================
+ZandersEqEditor::ZandersEqEditor (ZandersEqAudioProcessor& p)
+    : juce::AudioProcessorEditor (p), proc (p), content (p)
+{
+    addAndMakeVisible (content);
+
+    constrainer.setFixedAspectRatio ((double) designW / (double) designH);
+    const int minW = juce::roundToInt (designW * 0.6);
+    const int maxW = juce::roundToInt (designW * 1.7);
+    constrainer.setSizeLimits (minW, juce::roundToInt (minW * (double) designH / designW),
+                               maxW, juce::roundToInt (maxW * (double) designH / designW));
+    setConstrainer (&constrainer);
+    setResizable (true, false);
+
+    const int w = juce::jlimit (minW, maxW, proc.getEditorWidth());
+    setSize (w, juce::roundToInt (w * (double) designH / designW));
+}
+
+void ZandersEqEditor::paint (juce::Graphics& g)
+{
+    g.fillAll (theme::stageBase);   // letterbox background (no-op when aspect matches)
+}
+
+void ZandersEqEditor::resized()
+{
+    const float s = juce::jmin ((float) getWidth() / designW, (float) getHeight() / designH);
+    content.setBounds (0, 0, designW, designH);
+    content.setTransform (juce::AffineTransform::scale (s)
+                              .translated ((getWidth() - designW * s) * 0.5f,
+                                           (getHeight() - designH * s) * 0.5f));
+    proc.setEditorWidth (getWidth());
 }
 
 } // namespace zeq

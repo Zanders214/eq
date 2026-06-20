@@ -80,6 +80,14 @@ BandEditorRail::BandEditorRail (ZandersEqAudioProcessor& p)
     addAndMakeVisible (outputDial);
     outAtt = std::make_unique<Attachment> (apvts, ids::output, outputDial);
 
+    setupSlider (matchAmountSlider, "accent");
+    matchAmtAtt = std::make_unique<Attachment> (apvts, ids::matchamount, matchAmountSlider);
+
+    setupSlider (threshSlider,  "cool");
+    setupSlider (rangeSlider,   "accent");
+    setupSlider (attackSlider,  "warm");
+    setupSlider (releaseSlider, "warm");
+
     bindToSelected();
 }
 
@@ -108,7 +116,15 @@ void BandEditorRail::bindToSelected()
     freqAtt = std::make_unique<Attachment> (apvts, ids::freq (s), freqSlider);
     gainAtt = std::make_unique<Attachment> (apvts, ids::gain (s), gainSlider);
     qAtt    = std::make_unique<Attachment> (apvts, ids::q (s),    qSlider);
+
+    threshAtt.reset(); rangeAtt.reset(); attackAtt.reset(); releaseAtt.reset();
+    threshAtt  = std::make_unique<Attachment> (apvts, ids::dynThresh (s),  threshSlider);
+    rangeAtt   = std::make_unique<Attachment> (apvts, ids::dynRange (s),   rangeSlider);
+    attackAtt  = std::make_unique<Attachment> (apvts, ids::dynAttack (s),  attackSlider);
+    releaseAtt = std::make_unique<Attachment> (apvts, ids::dynRelease (s), releaseSlider);
+
     lastSelected = s;
+    resized();
     refresh();
 }
 
@@ -130,22 +146,55 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
 {
     Layout L;
     auto top = getLocalBounds();
-    L.header    = top.removeFromTop (18); top.removeFromTop (16);
+    L.header    = top.removeFromTop (18);
+    {
+        auto tabs = L.header.removeFromRight (74).withSizeKeepingCentre (74, 18);
+        L.eqTab  = tabs.removeFromLeft (35);
+        tabs.removeFromLeft (4);
+        L.dynTab = tabs;
+    }
+    top.removeFromTop (16);
     L.typeChips = top.removeFromTop (28); top.removeFromTop (18);
     L.freqBlock = top.removeFromTop (42); top.removeFromTop (16);
     L.gainBlock = top.removeFromTop (42); top.removeFromTop (16);
     L.qBlock    = top.removeFromTop (42); top.removeFromTop (8);
     L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
-    L.onSolo    = top.removeFromTop (36);
 
-    auto bottom = getLocalBounds().removeFromBottom (96);
+    // The DYN tab reuses the freq..slope span: an enable toggle + 4 sliders.
+    {
+        auto dynArea = L.freqBlock.getUnion (L.slopeRow);
+        L.dynEnable = dynArea.removeFromTop (30); dynArea.removeFromTop (10);
+        const int h = (dynArea.getHeight() - 3 * 8) / 4;
+        L.dynS0 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
+        L.dynS1 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
+        L.dynS2 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
+        L.dynS3 = dynArea.removeFromTop (h);
+    }
+    L.onSolo    = top.removeFromTop (36); top.removeFromTop (14);
+    L.channelRow = top.removeFromTop (28);
+
+    // EQ-match panel fills the gap between on/solo and the bottom dial/toggle block.
+    auto matchArea = top;
+    matchArea.removeFromBottom (124 + 14);
+    matchArea.removeFromTop (20);
+    L.matchLabel  = matchArea.removeFromTop (16);
+    matchArea.removeFromTop (6);
+    L.matchAmtRow = matchArea.removeFromTop (38);
+    matchArea.removeFromTop (8);
+    L.matchBtnRow = matchArea.removeFromTop (34);
+    L.captureBtn  = L.matchBtnRow.withWidth (L.matchBtnRow.getWidth() / 2 - 3);
+    L.matchBtn    = L.matchBtnRow.withTrimmedLeft (L.matchBtnRow.getWidth() / 2 + 3);
+
+    auto bottom = getLocalBounds().removeFromBottom (124);
     L.bottom = bottom;
     auto inner = bottom.withTrimmedTop (18);
     L.dial = inner.removeFromLeft (72);
     inner.removeFromLeft (18);
-    L.modeBtn = inner.removeFromTop (34);
-    inner.removeFromTop (8);
-    L.hqBtn = inner.removeFromTop (34);
+    L.modeBtn = inner.removeFromTop (30);
+    inner.removeFromTop (6);
+    L.hqBtn = inner.removeFromTop (30);
+    inner.removeFromTop (6);
+    L.autoBtn = inner.removeFromTop (30);
     return L;
 }
 
@@ -158,10 +207,33 @@ juce::Rectangle<float> BandEditorRail::segment (juce::Rectangle<int> row, int i,
 void BandEditorRail::resized()
 {
     auto L = computeLayout();
-    freqSlider.setBounds (L.freqBlock.withTrimmedTop (24));
-    gainSlider.setBounds (L.gainBlock.withTrimmedTop (24));
-    qSlider.setBounds    (L.qBlock.withTrimmedTop (24));
+    const bool cut = sitsOnZeroLine (selectedType());
+    const bool dynControls = showDyn && ! cut;
+
+    freqSlider.setVisible (! showDyn);
+    gainSlider.setVisible (! showDyn);
+    qSlider.setVisible    (! showDyn);
+    threshSlider.setVisible (dynControls);
+    rangeSlider.setVisible  (dynControls);
+    attackSlider.setVisible (dynControls);
+    releaseSlider.setVisible (dynControls);
+
+    if (! showDyn)
+    {
+        freqSlider.setBounds (L.freqBlock.withTrimmedTop (24));
+        gainSlider.setBounds (L.gainBlock.withTrimmedTop (24));
+        qSlider.setBounds    (L.qBlock.withTrimmedTop (24));
+    }
+    else if (dynControls)
+    {
+        threshSlider.setBounds  (L.dynS0.withTrimmedTop (15));
+        rangeSlider.setBounds   (L.dynS1.withTrimmedTop (15));
+        attackSlider.setBounds  (L.dynS2.withTrimmedTop (15));
+        releaseSlider.setBounds (L.dynS3.withTrimmedTop (15));
+    }
+
     outputDial.setBounds (L.dial.removeFromTop (60));
+    matchAmountSlider.setBounds (L.matchAmtRow.withTrimmedTop (20));
 }
 
 void BandEditorRail::paint (juce::Graphics& g)
@@ -190,9 +262,10 @@ void BandEditorRail::paint (juce::Graphics& g)
     g.setColour (text1);
     g.setFont (Fonts::grotesk (14.0f, Fonts::semibold));
     g.drawText ("BAND " + juce::String (s + 1), header.withTrimmedLeft (9), juce::Justification::centredLeft);
-    g.setColour (text3);
-    g.setFont (Fonts::mono (12.0f));
-    g.drawText (typeLabel (type), L.header, juce::Justification::centredRight);
+
+    // EQ | DYN tab toggle (right of the header)
+    drawChip (g, L.eqTab.toFloat(),  ! showDyn, "EQ",  9.0f, 0.08f);
+    drawChip (g, L.dynTab.toFloat(),   showDyn, "DYN", 9.0f, 0.08f);
 
     // type chips
     for (int i = 0; i < numFilterTypes; ++i)
@@ -211,19 +284,48 @@ void BandEditorRail::paint (juce::Graphics& g)
         g.setFont (Fonts::mono (12.0f, true));
         g.drawText (value, head, juce::Justification::centredRight);
     };
-    drawSliderHead (L.freqBlock, "FREQUENCY", fmtFreq (freq), false);
-    drawSliderHead (L.gainBlock, "GAIN", cut ? juce::String ("—") : fmtGain (gain), cut);
-    drawSliderHead (L.qBlock, "Q / SLOPE",
-                    cut ? juce::String (slope) + " dB/oct  Q" + juce::String (q, 2)
-                        : "Q " + juce::String (q, 2), false);
-
-    // slope picker (cut filters only)
-    if (cut)
+    if (! showDyn)
     {
-        const int slopes[3] = { 12, 24, 48 };
-        for (int i = 0; i < 3; ++i)
-            drawChip (g, segment (L.slopeRow, i, 3, 5.0f), slope == slopes[i],
-                      juce::String (slopes[i]) + " dB/oct", 9.0f, 0.03f);
+        drawSliderHead (L.freqBlock, "FREQUENCY", fmtFreq (freq), false);
+        drawSliderHead (L.gainBlock, "GAIN", cut ? juce::String ("—") : fmtGain (gain), cut);
+        drawSliderHead (L.qBlock, "Q / SLOPE",
+                        cut ? juce::String (slope) + " dB/oct  Q" + juce::String (q, 2)
+                            : "Q " + juce::String (q, 2), false);
+
+        // slope picker (cut filters only)
+        if (cut)
+        {
+            const int slopes[3] = { 12, 24, 48 };
+            for (int i = 0; i < 3; ++i)
+                drawChip (g, segment (L.slopeRow, i, 3, 5.0f), slope == slopes[i],
+                          juce::String (slopes[i]) + " dB/oct", 9.0f, 0.03f);
+        }
+    }
+    else if (cut)
+    {
+        // dynamics not available for cut/notch filters
+        g.setColour (text3.withAlpha (0.6f));
+        g.setFont (Fonts::grotesk (11.0f, Fonts::semibold).withExtraKerningFactor (0.04f));
+        g.drawText ("DYNAMICS AVAILABLE ON BELL / SHELF BANDS",
+                    L.freqBlock.getUnion (L.slopeRow), juce::Justification::centred);
+    }
+    else
+    {
+        const bool dynOn = apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f;
+        const float thr  = apvts.getRawParameterValue (ids::dynThresh (s))->load();
+        const float rng  = apvts.getRawParameterValue (ids::dynRange (s))->load();
+        const float att  = apvts.getRawParameterValue (ids::dynAttack (s))->load();
+        const float rel  = apvts.getRawParameterValue (ids::dynRelease (s))->load();
+        const float live = proc.getDynGainDb (s);
+
+        drawToggle (g, L.dynEnable.toFloat(), dynOn, dynOn ? "DYNAMICS ON" : "DYNAMICS OFF");
+        drawSliderHead (L.dynS0, "THRESHOLD", juce::String (thr, 1) + " dB", ! dynOn);
+        drawSliderHead (L.dynS1, "RANGE",
+                        (rng >= 0 ? "+" : "") + juce::String (rng, 1) + " dB"
+                        + (dynOn && std::abs (live) > 0.05f ? "  (" + juce::String (live, 1) + ")" : ""),
+                        ! dynOn);
+        drawSliderHead (L.dynS2, "ATTACK",  juce::String (att, att < 10 ? 1 : 0) + " ms", ! dynOn);
+        drawSliderHead (L.dynS3, "RELEASE", juce::String (rel, 0) + " ms", ! dynOn);
     }
 
     // enable / solo
@@ -252,6 +354,50 @@ void BandEditorRail::paint (juce::Graphics& g)
         g.drawText ("SOLO", soloBtn, juce::Justification::centred);
     }
 
+    // per-band channel lane (labels follow the global Stereo/MS domain)
+    {
+        const int ch = (int) apvts.getRawParameterValue (ids::channel (s))->load();
+        const char* lr[3] = { "L + R", "L", "R" };
+        const char* msl[3] = { "M + S", "M", "S" };
+        for (int i = 0; i < 3; ++i)
+            drawChip (g, segment (L.channelRow, i, 3, 5.0f), ch == i,
+                      ms ? msl[i] : lr[i], 9.0f, 0.06f);
+    }
+
+    // EQ-match panel
+    {
+        auto label = L.matchLabel;
+        g.setColour (textLabel);
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+        g.drawText ("EQ MATCH", label, juce::Justification::centredLeft);
+
+        auto srcChip = juce::Rectangle<float> ((float) label.getRight() - 78.0f, (float) label.getY(), 36.0f, 16.0f);
+        auto refChip = juce::Rectangle<float> ((float) label.getRight() - 38.0f, (float) label.getY(), 36.0f, 16.0f);
+        drawChip (g, srcChip, proc.hasSource(),    "SRC", 8.5f, 0.06f);
+        drawChip (g, refChip, proc.hasReference(), "REF", 8.5f, 0.06f);
+
+        g.setColour (textLabel);
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+        g.drawText ("MATCH AMOUNT", L.matchAmtRow.withHeight (14), juce::Justification::centredLeft);
+        g.setColour (text2);
+        g.setFont (Fonts::mono (12.0f, true));
+        g.drawText (juce::String (juce::roundToInt (apvts.getRawParameterValue (ids::matchamount)->load())) + " %",
+                    L.matchAmtRow.withHeight (14), juce::Justification::centredRight);
+
+        const bool capturing = proc.isCapturing();
+        drawToggle (g, L.captureBtn.toFloat(), capturing, capturing ? "CAPTURING" : "CAPTURE");
+
+        auto mb = L.matchBtn.toFloat();
+        const bool canMatch = proc.hasMatchData();
+        g.setColour (canMatch ? accentVio.withAlpha (0.16f) : whiteAlpha (0.05f));
+        g.fillRoundedRectangle (mb, 8.0f);
+        g.setColour (canMatch ? accentVio.withAlpha (0.45f) : whiteAlpha (0.08f));
+        g.drawRoundedRectangle (mb.reduced (0.5f), 8.0f, 1.0f);
+        g.setColour (canMatch ? juce::Colour (0xffb6abff) : text3.withAlpha (0.5f));
+        g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
+        g.drawText ("MATCH", mb, juce::Justification::centred);
+    }
+
     // bottom: divider, output dial caption/value, mode + hq
     g.setColour (whiteAlpha (0.08f));
     g.drawHorizontalLine (L.bottom.getY(), 0.0f, (float) getWidth());
@@ -266,8 +412,13 @@ void BandEditorRail::paint (juce::Graphics& g)
     g.drawText ((out >= 0.0f ? "+" : "") + juce::String (out, 1) + " dB",
                 caption.withTrimmedTop (12).withHeight (14), juce::Justification::centred);
 
+    const bool ag = apvts.getRawParameterValue (ids::autogain)->load() > 0.5f;
+    juce::String autoLabel = "AUTO GAIN";
+    if (ag) autoLabel << "   " << juce::String (proc.getAutoGainTrimDb(), 1) << " dB";
+
     drawToggle (g, L.modeBtn.toFloat(), ms, ms ? "MID/SIDE" : "STEREO");
     drawToggle (g, L.hqBtn.toFloat(), hq, "HQ OVERSAMPLING");
+    drawToggle (g, L.autoBtn.toFloat(), ag, autoLabel);
 }
 
 void BandEditorRail::mouseDown (const juce::MouseEvent& e)
@@ -275,6 +426,10 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
     auto L = computeLayout();
     const int s = selected();
     const auto p = e.position;
+
+    // EQ | DYN tab
+    if (L.eqTab.toFloat().contains (p))  { showDyn = false; resized(); repaint(); return; }
+    if (L.dynTab.toFloat().contains (p)) { showDyn = true;  resized(); repaint(); return; }
 
     for (int i = 0; i < numFilterTypes; ++i)
         if (segment (L.typeChips, i, numFilterTypes, 5.0f).contains (p))
@@ -284,7 +439,17 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
             return;
         }
 
-    if (isCut (selectedType()))
+    if (showDyn)
+    {
+        if (! sitsOnZeroLine (selectedType()) && L.dynEnable.toFloat().contains (p))
+        {
+            setBool (ids::dynOn (s), ! (apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f));
+            refresh();
+            return;
+        }
+    }
+    else if (isCut (selectedType()))
+    {
         for (int i = 0; i < 3; ++i)
             if (segment (L.slopeRow, i, 3, 5.0f).contains (p))
             {
@@ -292,14 +457,27 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
                 repaint();
                 return;
             }
+    }
 
     auto onBtn = juce::Rectangle<int> (L.onSolo).removeFromLeft (L.onSolo.getWidth() / 2 - 3).toFloat();
     auto soloBtn = juce::Rectangle<int> (L.onSolo).removeFromRight (L.onSolo.getWidth() / 2 - 3).toFloat();
     if (onBtn.contains (p))   { setBool (ids::on (s),   ! (apvts.getRawParameterValue (ids::on (s))->load() > 0.5f)); repaint(); return; }
     if (soloBtn.contains (p)) { setBool (ids::solo (s), ! (apvts.getRawParameterValue (ids::solo (s))->load() > 0.5f)); repaint(); return; }
 
+    for (int i = 0; i < 3; ++i)
+        if (segment (L.channelRow, i, 3, 5.0f).contains (p))
+        {
+            setChoice (ids::channel (s), i);
+            repaint();
+            return;
+        }
+
     if (L.modeBtn.toFloat().contains (p)) { setChoice (ids::mode, apvts.getRawParameterValue (ids::mode)->load() > 0.5f ? 0 : 1); repaint(); return; }
     if (L.hqBtn.toFloat().contains (p))   { setBool (ids::hq, ! (apvts.getRawParameterValue (ids::hq)->load() > 0.5f)); repaint(); return; }
+    if (L.autoBtn.toFloat().contains (p)) { setBool (ids::autogain, ! (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)); repaint(); return; }
+
+    if (L.captureBtn.toFloat().contains (p)) { if (onCapture) onCapture(); repaint(); return; }
+    if (L.matchBtn.toFloat().contains (p) && proc.hasMatchData()) { if (onMatch) onMatch(); repaint(); return; }
 }
 
 } // namespace zeq

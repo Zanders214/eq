@@ -1,5 +1,7 @@
 # ZandersEQ
 
+[![CI](https://github.com/zanders214/eq/actions/workflows/ci.yml/badge.svg)](https://github.com/zanders214/eq/actions/workflows/ci.yml)
+
 A FabFilter Pro-Q-style **parametric EQ audio plugin** for DAWs (VST3 / AU / Standalone),
 built with [JUCE](https://juce.com). The hero is a live frequency-response curve with a
 real-time FFT spectrum behind it; you drag band nodes on the curve and refine them in the
@@ -23,7 +25,19 @@ shipping product is the JUCE plugin under `src/`.
   behind the response curve.
 - **Draggable response curve** — drag a node for freq/gain, scroll a node for Q,
   double-click empty space to add a band, double-click a node to remove it, click to select.
-- **Output gain** (±24 dB), **Stereo / Mid-Side** processing, **HQ 2× oversampling**.
+- **Spectrum grab** — press-drag on empty analyzer space to spawn a bell snapped to the
+  nearest spectral peak and pull it in one gesture.
+- **Output gain** (±24 dB), global **Stereo / Mid-Side** domain, **HQ 2× oversampling**, and
+  **Auto-gain** (loudness-matched output trim, shown live next to the toggle).
+- **Per-band channel lane** — within the global domain each band targets Both / first / second
+  (L+R·L·R in Stereo, M+S·M·S in Mid-Side); non-Both bands show an L/R/M/S letter on their node.
+- **Dynamic EQ** (bell/shelf) — each band has a detector (band-pass + envelope follower) and a
+  threshold/range/attack/release so its gain reacts to level (de-ess, tame resonances, boost
+  transients). The curve animates live; a draggable handle on the node sets the dynamic range.
+- **EQ match** — capture a reference (sidechain input) and the source simultaneously, then
+  fit the 6 bands to their tonal-balance difference (greedy peak-pick + weighted
+  least-squares), with a Match Amount control and a ghost target curve. Result stays fully
+  editable. Fitter is unit-tested (`-DZEQ_BUILD_TESTS=ON`).
 - **A/B** compare slots and the six README presets (Flat, Vocal Air, De-Mud, Bass Tight,
   Lo-Fi, Bright).
 - All parameter changes are smoothed (no zipper noise); `processBlock` is real-time safe
@@ -56,8 +70,9 @@ sudo apt-get install libasound2-dev libjack-jackd2-dev libfreetype-dev libfontco
 
 ### Platforms
 
-`VST3` and `Standalone` build everywhere; `AU` is added automatically on macOS. The design
-targets a fixed 1100×690 panel.
+`VST3` and `Standalone` build everywhere; `AU` is added automatically on macOS. The 1100×772
+design panel is **resizable** — the whole UI scales uniformly (aspect-locked, ~0.6×–1.7×),
+and the chosen size is remembered with the plugin state.
 
 ## Project layout
 

@@ -11,12 +11,15 @@
 namespace zeq
 {
 
-class ZandersEqEditor : public juce::AudioProcessorEditor,
-                        private juce::Timer
+// The full UI, laid out at the fixed design size. The editor host scales this to
+// whatever window size the user picks (uniform zoom), so every absolute-pixel
+// layout and hit-test below stays exactly as designed.
+class EqContent : public juce::Component,
+                  private juce::Timer
 {
 public:
-    explicit ZandersEqEditor (ZandersEqAudioProcessor&);
-    ~ZandersEqEditor() override;
+    explicit EqContent (ZandersEqAudioProcessor&);
+    ~EqContent() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -35,6 +38,27 @@ private:
     BandEditorRail   rail;
 
     juce::Rectangle<int> headerBounds, wellBounds, abA, abB;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EqContent)
+};
+
+// Thin resizable host: scales EqContent to fit the (aspect-locked) window.
+class ZandersEqEditor : public juce::AudioProcessorEditor
+{
+public:
+    explicit ZandersEqEditor (ZandersEqAudioProcessor&);
+    ~ZandersEqEditor() override = default;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+    static constexpr int designW = 1100;
+    static constexpr int designH = 772;
+
+private:
+    ZandersEqAudioProcessor& proc;
+    EqContent content;
+    juce::ComponentBoundsConstrainer constrainer;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZandersEqEditor)
 };

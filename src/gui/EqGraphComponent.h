@@ -28,15 +28,26 @@ public:
     // Driven by the editor's timer: pull a new FFT frame and advance the spectrum.
     void updateAnimation();
 
+    // EQ match
+    void toggleCapture();   // start/stop capturing reference (sidechain) + source (main)
+    void runMatch();        // fit the bands to the captured difference
+
     std::function<void()> onSelectionChanged;
 
 private:
-    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; };
+    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; int channel;
+                      bool dynOn; float range; float dynGain; };
 
     BandView readBand (int i) const;
     bool anySolo() const;
     int  nodeAtPosition (juce::Point<float>) const;
+    int  rangeHandleAt (juce::Point<float>) const;
     juce::Point<float> nodePosition (const BandView&) const;
+    float effectiveGain (const BandView& b) const { return b.gain + (b.dynOn ? b.dynGain : 0.0f); }
+
+    int   spareBand() const;                 // first disabled band, or -1
+    float snapToSpectrumPeak (float x) const; // nearest analyzer peak frequency
+    int   beginSpectrumGrab (float x);        // create+select a bell at a resonance
 
     void setParam (const juce::String& id, float realValue);
     void setChoice (const juce::String& id, int index);
@@ -49,6 +60,10 @@ private:
     void drawCurve (juce::Graphics&);
     void drawNodes (juce::Graphics&);
 
+    // EQ-match capture helpers
+    void accumulateTap (AnalyzerFifo&, std::array<double, kMatchBins>&, int& frames);
+    void finishCapture();
+
     ZandersEqAudioProcessor& proc;
     juce::AudioProcessorValueTreeState& apvts;
 
@@ -60,9 +75,16 @@ private:
     std::array<float, numPoints> scope {};
     std::array<float, numPoints> peaks {};
 
+    // EQ-match capture accumulators (message-thread only; raw power per log bin)
+    std::array<double, kMatchBins> accumSrc {}, accumRef {};
+    int capFramesSrc = 0, capFramesRef = 0;
+
     // drag state
     int dragBand = -1;
     bool draggingGain = false;
+    bool draggingRange = false;        // dragging a band's dynamic-range handle
+    bool pendingGrab = false;          // mouse is down on empty graph, may become a grab
+    juce::Point<float> grabDownPos;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EqGraphComponent)
 };

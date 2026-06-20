@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test-validate:
+    runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build xvfb ccache unzip \
+            libasound2-dev libjack-jackd2-dev \
+            libxinerama-dev libxrandr-dev libxcursor-dev libxcomposite-dev libxext-dev \
+            libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libcurl4-openssl-dev
+
+      # Reuse the fetched JUCE source tree across runs (keyed on the pinned tag in CMakeLists).
+      - name: Cache JUCE source
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-src-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Configure
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DZEQ_BUILD_TESTS=ON
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Download pluginval
+        run: |
+          curl -sSL https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip -o pluginval.zip
+          unzip -o pluginval.zip
+          chmod +x pluginval
+
+      - name: Validate (pluginval, strictness 10)
+        run: >
+          xvfb-run -a ./pluginval --strictness-level 10
+          --validate build/ZandersEQ_artefacts/Release/VST3/ZandersEQ.vst3
+
+      - name: Upload VST3 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZandersEQ-VST3
+          path: build/ZandersEQ_artefacts/Release/VST3/ZandersEQ.vst3
+          if-no-files-found: ignore

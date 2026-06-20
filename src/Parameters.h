@@ -6,10 +6,7 @@
 namespace zeq
 {
 
-// Fixed pool of bands. Six matches the design's default set, the six-cell band
-// strip and the six spectrum colours. Bump this constant to expand the EQ — the
-// strip, nodes and parameter layout are all driven from it.
-inline constexpr int numBands = 6;
+// numBands is defined in dsp/EqMath.h (shared with non-JUCE code like MatchFit).
 
 namespace ids
 {
@@ -17,6 +14,8 @@ namespace ids
     inline constexpr const char* output = "output";   // -24..+24 dB
     inline constexpr const char* mode   = "mode";     // 0 = Stereo, 1 = Mid/Side
     inline constexpr const char* hq     = "hq";       // HQ oversampling
+    inline constexpr const char* autogain = "autogain"; // loudness-matched output trim
+    inline constexpr const char* matchamount = "matchamount"; // EQ-match strength 0..100%
 
     // Per-band, suffixed with the band index, e.g. "band0_freq".
     inline juce::String band  (int i)               { return "band" + juce::String (i) + "_"; }
@@ -27,6 +26,12 @@ namespace ids
     inline juce::String slope (int i)               { return band (i) + "slope"; }
     inline juce::String on    (int i)               { return band (i) + "on"; }
     inline juce::String solo  (int i)               { return band (i) + "solo"; }
+    inline juce::String channel (int i)             { return band (i) + "channel"; }
+    inline juce::String dynOn     (int i)           { return band (i) + "dynon"; }
+    inline juce::String dynThresh (int i)           { return band (i) + "dynthresh"; }
+    inline juce::String dynRange  (int i)           { return band (i) + "dynrange"; }
+    inline juce::String dynAttack (int i)           { return band (i) + "dynattack"; }
+    inline juce::String dynRelease(int i)           { return band (i) + "dynrelease"; }
 }
 
 // Parameter ranges (shared by the engine and the UI mappings).
@@ -74,6 +79,14 @@ inline juce::NormalisableRange<float> makeQRange()
         [] (float start, float end, float v) { return std::log (v / start) / std::log (end / start); },
         [] (float start, float end, float v) { return juce::jlimit (start, end, v); });
     return r;
+}
+
+inline juce::NormalisableRange<float> makeLogRange (float lo, float hi)
+{
+    return { lo, hi,
+        [] (float s, float e, float t) { return s * std::pow (e / s, t); },
+        [] (float s, float e, float v) { return std::log (v / s) / std::log (e / s); },
+        [] (float s, float e, float v) { return juce::jlimit (s, e, v); } };
 }
 
 // The default six-band shape from the design handoff (README "Default bands").
@@ -130,6 +143,32 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
         layout.add (std::make_unique<AudioParameterBool> (
             ParameterID { ids::solo (i), 1 }, g + "Solo", false));
+
+        // Per-band lane within the global domain: Both / first / second
+        // (= L+R/L/R in Stereo, M+S/M/S in Mid-Side).
+        layout.add (std::make_unique<AudioParameterChoice> (
+            ParameterID { ids::channel (i), 1 }, g + "Channel",
+            StringArray { "Both", "Left / Mid", "Right / Side" }, 0));
+
+        // Dynamic EQ (bell/shelf only): detector-driven gain offset.
+        layout.add (std::make_unique<AudioParameterBool> (
+            ParameterID { ids::dynOn (i), 1 }, g + "Dyn On", false));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { ids::dynThresh (i), 1 }, g + "Dyn Threshold",
+            NormalisableRange<float> (-60.0f, 0.0f, 0.1f), -24.0f,
+            AudioParameterFloatAttributes().withLabel ("dB")));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { ids::dynRange (i), 1 }, g + "Dyn Range",
+            NormalisableRange<float> (-30.0f, 30.0f, 0.1f), 0.0f,
+            AudioParameterFloatAttributes().withLabel ("dB")));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { ids::dynAttack (i), 1 }, g + "Dyn Attack",
+            makeLogRange (0.5f, 200.0f), 10.0f,
+            AudioParameterFloatAttributes().withLabel ("ms")));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { ids::dynRelease (i), 1 }, g + "Dyn Release",
+            makeLogRange (10.0f, 2000.0f), 150.0f,
+            AudioParameterFloatAttributes().withLabel ("ms")));
     }
 
     layout.add (std::make_unique<AudioParameterFloat> (
@@ -143,6 +182,14 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     layout.add (std::make_unique<AudioParameterBool> (
         ParameterID { ids::hq, 1 }, "HQ", false));
+
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { ids::autogain, 1 }, "Auto Gain", false));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { ids::matchamount, 1 }, "Match Amount",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f,
+        AudioParameterFloatAttributes().withLabel ("%")));
 
     return layout;
 }

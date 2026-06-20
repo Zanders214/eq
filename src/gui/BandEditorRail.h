@@ -23,13 +23,18 @@ public:
     void bindToSelected();   // rebind the FREQ/GAIN/Q sliders to the selected band
     void refresh();          // poll values, update dynamic styling, repaint
 
+    std::function<void()> onCapture;   // EQ-match: start/stop capture
+    std::function<void()> onMatch;     // EQ-match: apply the fit
+
 private:
     using Attachment = juce::AudioProcessorValueTreeState::SliderAttachment;
 
     struct Layout
     {
-        juce::Rectangle<int> header, typeChips, freqBlock, gainBlock, qBlock,
-                             slopeRow, onSolo, bottom, dial, modeBtn, hqBtn;
+        juce::Rectangle<int> header, eqTab, dynTab, typeChips, freqBlock, gainBlock, qBlock,
+                             slopeRow, onSolo, channelRow, bottom, dial, modeBtn, hqBtn, autoBtn,
+                             matchLabel, matchAmtRow, matchBtnRow, captureBtn, matchBtn,
+                             dynEnable, dynS0, dynS1, dynS2, dynS3;
     };
     Layout computeLayout() const;
 
@@ -44,9 +49,12 @@ private:
     ZandersEqAudioProcessor& proc;
     juce::AudioProcessorValueTreeState& apvts;
 
-    juce::Slider freqSlider, gainSlider, qSlider, outputDial;
-    std::unique_ptr<Attachment> freqAtt, gainAtt, qAtt, outAtt;
+    juce::Slider freqSlider, gainSlider, qSlider, outputDial, matchAmountSlider;
+    juce::Slider threshSlider, rangeSlider, attackSlider, releaseSlider;
+    std::unique_ptr<Attachment> freqAtt, gainAtt, qAtt, outAtt, matchAmtAtt;
+    std::unique_ptr<Attachment> threshAtt, rangeAtt, attackAtt, releaseAtt;
 
+    bool showDyn = false;
     int lastSelected = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandEditorRail)

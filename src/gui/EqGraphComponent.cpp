@@ -50,6 +50,10 @@ EqGraphComponent::BandView EqGraphComponent::readBand (int i) const
     b.on    = apvts.getRawParameterValue (ids::on (i))->load() > 0.5f;
     const bool solo = apvts.getRawParameterValue (ids::solo (i))->load() > 0.5f;
     b.live  = b.on && (! anySolo() || solo);
+    b.channel = (int) apvts.getRawParameterValue (ids::channel (i))->load();
+    b.dynOn = apvts.getRawParameterValue (ids::dynOn (i))->load() > 0.5f && ! sitsOnZeroLine (b.type);
+    b.range = apvts.getRawParameterValue (ids::dynRange (i))->load();
+    b.dynGain = proc.getDynGainDb (i);
     return b;
 }
 
@@ -59,6 +63,49 @@ juce::Point<float> EqGraphComponent::nodePosition (const BandView& b) const
     const float x = freqToX (b.freq, w);
     const float y = sitsOnZeroLine (b.type) ? gainToY (0.0f, h) : gainToY (b.gain, h);
     return { x, y };
+}
+
+int EqGraphComponent::spareBand() const
+{
+    for (int i = 0; i < numBands; ++i)
+        if (apvts.getRawParameterValue (ids::on (i))->load() <= 0.5f)
+            return i;
+    return -1;
+}
+
+// Snap a frequency to the strongest analyzer bin within ~1/6-octave of the cursor.
+float EqGraphComponent::snapToSpectrumPeak (float x) const
+{
+    const float w = (float) getWidth();
+    const float centreFrac = juce::jlimit (0.0f, 1.0f, x / w);
+    const int   centre = juce::roundToInt (centreFrac * (numPoints - 1));
+    const int   span = juce::jmax (3, numPoints / 36);  // ~1/6 octave window
+
+    int bestIdx = centre;
+    float bestLvl = -1.0f;
+    for (int i = juce::jmax (0, centre - span); i <= juce::jmin (numPoints - 1, centre + span); ++i)
+        if (scope[(size_t) i] > bestLvl) { bestLvl = scope[(size_t) i]; bestIdx = i; }
+
+    // Only snap if there's a meaningful peak; otherwise use the cursor frequency.
+    const float frac = (bestLvl > 0.04f) ? (float) bestIdx / (numPoints - 1) : centreFrac;
+    return juce::jlimit (fMin, fMax, fMin * std::exp (frac * logSpan));
+}
+
+int EqGraphComponent::beginSpectrumGrab (float x)
+{
+    const int b = spareBand();
+    if (b < 0)
+        return -1;
+
+    const float f = snapToSpectrumPeak (x);
+    setChoice (ids::type (b), (int) FilterType::bell);
+    setParam (ids::freq (b), f);
+    setParam (ids::gain (b), 0.0f);
+    setParam (ids::q (b), 1.4f);
+    setBool (ids::on (b), true);
+    proc.setSelectedBand (b);
+    if (onSelectionChanged) onSelectionChanged();
+    return b;
 }
 
 int EqGraphComponent::nodeAtPosition (juce::Point<float> p) const
@@ -72,6 +119,23 @@ int EqGraphComponent::nodeAtPosition (juce::Point<float> p) const
         if (d < bestDist) { bestDist = d; best = i; }
     }
     return best;
+}
+
+// A dynamic-range handle, only when it has separated enough from its node.
+int EqGraphComponent::rangeHandleAt (juce::Point<float> p) const
+{
+    const float w = (float) getWidth(), h = (float) getHeight();
+    for (int i = 0; i < numBands; ++i)
+    {
+        const auto b = readBand (i);
+        if (! b.dynOn) continue;
+        const float x = freqToX (b.freq, w);
+        const float yStatic = gainToY (b.gain, h);
+        const float yRange  = gainToY (b.gain + b.range, h);
+        if (std::abs (yRange - yStatic) < 11.0f) continue;   // too close to the node
+        if (juce::Point<float> (x, yRange).getDistanceFrom (p) < 9.0f) return i;
+    }
+    return -1;
 }
 
 // ---- painting ---------------------------------------------------------------
@@ -180,7 +244,7 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
         const float f = xToFreq ((float) x, w);
         double db = 0.0;
         for (auto& b : bv)
-            db += bandMagnitudeDb (b.type, b.freq, b.gain, b.q, b.slope, b.live, f, sr);
+            db += bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
         const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
         if (x == 0) curve.startNewSubPath ((float) x, y); else curve.lineTo ((float) x, y);
     }
@@ -193,6 +257,25 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
     g.setColour (text1.withAlpha (0.06f));
     g.fillPath (fill);
 
+    // EQ-match ghost: the target (reference - source) difference curve
+    if (proc.hasMatchData())
+    {
+        std::array<float, kMatchBins> tgt {};
+        computeTargetDb (proc.getReferenceCurve(), proc.getSourceCurve(), kMatchBins, tgt.data());
+        juce::Path ghost;
+        for (int k = 0; k < kMatchBins; ++k)
+        {
+            const float gx = (float) k / (kMatchBins - 1) * w;
+            const float gy = juce::jlimit (-2.0f, h + 2.0f, gainToY (tgt[(size_t) k], h));
+            if (k == 0) ghost.startNewSubPath (gx, gy); else ghost.lineTo (gx, gy);
+        }
+        const float gdash[] = { 4.0f, 4.0f };
+        juce::Path gdashed;
+        juce::PathStrokeType (1.4f).createDashedStroke (gdashed, ghost, gdash, 2);
+        g.setColour (accentVio.withAlpha (0.55f));
+        g.fillPath (gdashed);
+    }
+
     // selected band's individual (dashed) curve
     const int sel = proc.getSelectedBand();
     if (sel >= 0 && sel < numBands)
@@ -202,7 +285,7 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
         for (int x = 0; x <= (int) w; x += step)
         {
             const float f = xToFreq ((float) x, w);
-            const double db = bandMagnitudeDb (b.type, b.freq, b.gain, b.q, b.slope, b.live, f, sr);
+            const double db = bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
             const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
             if (x == 0) bp.startNewSubPath ((float) x, y); else bp.lineTo ((float) x, y);
         }
@@ -223,6 +306,7 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
 void EqGraphComponent::drawNodes (juce::Graphics& g)
 {
     const int sel = proc.getSelectedBand();
+    const bool ms = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
     for (int i = 0; i < numBands; ++i)
     {
         const auto b = readBand (i);
@@ -248,12 +332,58 @@ void EqGraphComponent::drawNodes (juce::Graphics& g)
         g.setFont (Fonts::grotesk (9.0f, Fonts::semibold));
         g.drawText (juce::String (i + 1), juce::Rectangle<float> (pos.x - r, pos.y - r, r * 2, r * 2),
                     juce::Justification::centred);
+
+        // channel-lane badge (first/second lane only) at the node's upper-right
+        if (b.channel == 1 || b.channel == 2)
+        {
+            const juce::String letter = ms ? (b.channel == 1 ? "M" : "S")
+                                           : (b.channel == 1 ? "L" : "R");
+            const float br = 6.0f;
+            juce::Point<float> bp (pos.x + r * 0.75f, pos.y - r * 0.95f);
+            g.setColour (col);
+            g.fillEllipse (bp.x - br, bp.y - br, br * 2, br * 2);
+            g.setColour (juce::Colour (0xff0a0b12));
+            g.setFont (Fonts::grotesk (8.0f, Fonts::bold));
+            g.drawText (letter, juce::Rectangle<float> (bp.x - br, bp.y - br, br * 2, br * 2),
+                        juce::Justification::centred);
+        }
+
+        // dynamic-EQ: range bracket + draggable handle + live-gain dot
+        if (b.dynOn)
+        {
+            const float h = (float) getHeight();
+            const float yRange = juce::jlimit (-2.0f, h + 2.0f, gainToY (b.gain + b.range, h));
+            const float yLive  = juce::jlimit (-2.0f, h + 2.0f, gainToY (b.gain + b.dynGain, h));
+            g.setColour (col.withAlpha (0.45f));
+            g.drawLine (pos.x, pos.y, pos.x, yRange, 1.5f);
+            g.setColour (col.withAlpha (0.25f));
+            g.fillEllipse (pos.x - 5.0f, yRange - 5.0f, 10.0f, 10.0f);
+            g.setColour (col);
+            g.drawEllipse (pos.x - 5.0f, yRange - 5.0f, 10.0f, 10.0f, 1.5f);
+            g.setColour (juce::Colours::white);
+            g.fillEllipse (pos.x - 2.5f, yLive - 2.5f, 5.0f, 5.0f);
+        }
     }
 }
 
 // ---- interaction ------------------------------------------------------------
 void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // dynamic-range handle takes priority over the node beneath it
+    const int rh = rangeHandleAt (e.position);
+    if (rh >= 0)
+    {
+        if (rh != proc.getSelectedBand())
+        {
+            proc.setSelectedBand (rh);
+            if (onSelectionChanged) onSelectionChanged();
+        }
+        dragBand = rh;
+        draggingRange = true;
+        beginGesture (ids::dynRange (rh));
+        return;
+    }
+
     const int b = nodeAtPosition (e.position);
     if (b >= 0)
     {
@@ -271,13 +401,38 @@ void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
     else
     {
         dragBand = -1;
+        pendingGrab = true;          // may turn into a spectrum grab if dragged
+        grabDownPos = e.position;
     }
 }
 
 void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 {
-    if (dragBand < 0) return;
     const float w = (float) getWidth(), h = (float) getHeight();
+
+    if (draggingRange && dragBand >= 0)
+    {
+        const float staticGain = readBand (dragBand).gain;
+        const float y = juce::jlimit (0.0f, h, e.position.y);
+        setParam (ids::dynRange (dragBand), juce::jlimit (-30.0f, 30.0f, yToGain (y, h) - staticGain));
+        return;
+    }
+
+    // Promote a press-on-empty into a spectrum grab once the user actually drags.
+    if (dragBand < 0 && pendingGrab && e.position.getDistanceFrom (grabDownPos) > 4.0f)
+    {
+        const int b = beginSpectrumGrab (grabDownPos.x);
+        pendingGrab = false;
+        if (b >= 0)
+        {
+            dragBand = b;
+            draggingGain = true;
+            beginGesture (ids::freq (b));
+            beginGesture (ids::gain (b));
+        }
+    }
+
+    if (dragBand < 0) return;
     const float x = juce::jlimit (0.0f, w, e.position.x);
     const float y = juce::jlimit (0.0f, h, e.position.y);
     setParam (ids::freq (dragBand), juce::jlimit (fMin, fMax, xToFreq (x, w)));
@@ -287,7 +442,15 @@ void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 
 void EqGraphComponent::mouseUp (const juce::MouseEvent&)
 {
+    pendingGrab = false;
     if (dragBand < 0) return;
+    if (draggingRange)
+    {
+        endGesture (ids::dynRange (dragBand));
+        draggingRange = false;
+        dragBand = -1;
+        return;
+    }
     endGesture (ids::freq (dragBand));
     if (draggingGain) endGesture (ids::gain (dragBand));
     dragBand = -1;
@@ -367,6 +530,111 @@ void EqGraphComponent::updateAnimation()
     {
         for (int p = 0; p < numPoints; ++p)
             peaks[(size_t) p] = juce::jmax (scope[(size_t) p], peaks[(size_t) p] - 0.004f);
+    }
+
+    if (proc.isCapturing())
+    {
+        accumulateTap (proc.getCaptureFifo (ZandersEqAudioProcessor::CaptureSlot::source), accumSrc, capFramesSrc);
+        if (proc.sidechainActive())
+            accumulateTap (proc.getCaptureFifo (ZandersEqAudioProcessor::CaptureSlot::reference), accumRef, capFramesRef);
+    }
+}
+
+// Consume one capture FFT frame and accumulate RAW power per match bin (no tilt).
+void EqGraphComponent::accumulateTap (AnalyzerFifo& f, std::array<double, kMatchBins>& accum, int& frames)
+{
+    if (! f.blockReady.load (std::memory_order_acquire))
+        return;
+
+    window.multiplyWithWindowingTable (f.fftData.data(), (size_t) AnalyzerFifo::fftSize);
+    fft.performFrequencyOnlyForwardTransform (f.fftData.data());
+
+    const double sr = proc.getActiveSampleRate();
+    const int half = AnalyzerFifo::fftSize / 2;
+    for (int k = 0; k < kMatchBins; ++k)
+    {
+        const double freq = matchBinFreq (k, kMatchBins);
+        const float bin = (float) (freq * AnalyzerFifo::fftSize / sr);
+        const int i0 = juce::jlimit (0, half - 2, (int) bin);
+        const float frac = juce::jlimit (0.0f, 1.0f, bin - (float) i0);
+        const float mag = juce::jmap (frac, f.fftData[(size_t) i0], f.fftData[(size_t) i0 + 1]);
+        const double magNorm = (double) mag / ((double) AnalyzerFifo::fftSize * 0.5);
+        accum[(size_t) k] += magNorm * magNorm;
+    }
+    ++frames;
+    f.blockReady.store (false, std::memory_order_release);
+}
+
+void EqGraphComponent::toggleCapture()
+{
+    if (proc.isCapturing())
+    {
+        finishCapture();
+    }
+    else
+    {
+        accumSrc.fill (0.0); accumRef.fill (0.0);
+        capFramesSrc = capFramesRef = 0;
+        proc.setCapturing (true);
+    }
+}
+
+void EqGraphComponent::finishCapture()
+{
+    proc.setCapturing (false);
+
+    const int minFrames = 8;   // need a representative span, not a momentary blip
+    std::array<float, kMatchBins> mean {};
+    if (capFramesSrc >= minFrames)
+    {
+        for (int k = 0; k < kMatchBins; ++k) mean[(size_t) k] = (float) (accumSrc[(size_t) k] / capFramesSrc);
+        proc.storeCaptureCurve (ZandersEqAudioProcessor::CaptureSlot::source, mean.data(), kMatchBins);
+    }
+    if (capFramesRef >= minFrames)
+    {
+        double energy = 0.0;
+        for (int k = 0; k < kMatchBins; ++k) { mean[(size_t) k] = (float) (accumRef[(size_t) k] / capFramesRef); energy += mean[(size_t) k]; }
+        if (energy > 1.0e-9)   // only store a reference that actually carried signal
+            proc.storeCaptureCurve (ZandersEqAudioProcessor::CaptureSlot::reference, mean.data(), kMatchBins);
+    }
+}
+
+void EqGraphComponent::runMatch()
+{
+    if (! proc.hasMatchData())
+        return;
+
+    const float amount = apvts.getRawParameterValue (ids::matchamount)->load() / 100.0f;
+    const auto res = fitMatch (proc.getReferenceCurve(), proc.getSourceCurve(),
+                               kMatchBins, proc.getActiveSampleRate(), amount);
+
+    int firstUsed = -1;
+    for (int i = 0; i < numBands; ++i)
+    {
+        const auto& b = res.bands[(size_t) i];
+        beginGesture (ids::type (i)); beginGesture (ids::freq (i)); beginGesture (ids::gain (i));
+        beginGesture (ids::q (i));    beginGesture (ids::slope (i)); beginGesture (ids::on (i));
+
+        setChoice (ids::type (i), (int) b.type);
+        if (b.on)
+        {
+            setParam (ids::freq (i), b.freq);
+            setParam (ids::gain (i), b.gain);
+            setParam (ids::q (i), b.q);
+            setChoice (ids::slope (i), slopeValueToIndex (b.slope));
+            if (firstUsed < 0) firstUsed = i;
+        }
+        setBool (ids::on (i), b.on);
+        setBool (ids::solo (i), false);
+
+        endGesture (ids::type (i)); endGesture (ids::freq (i)); endGesture (ids::gain (i));
+        endGesture (ids::q (i));    endGesture (ids::slope (i)); endGesture (ids::on (i));
+    }
+
+    if (firstUsed >= 0)
+    {
+        proc.setSelectedBand (firstUsed);
+        if (onSelectionChanged) onSelectionChanged();
     }
 }
 

@@ -73,6 +73,7 @@ public:
     AnalyzerFifo& getAnalyzerFifo() noexcept { return analyzer; }
     double getActiveSampleRate() const noexcept { return baseSampleRate; }
     float getAutoGainTrimDb() const noexcept { return autoGainDb.load(); }
+    float getDynGainDb (int band) const noexcept { return dynGainDisplay[(size_t) band].load(); }
 
     // --- EQ match (capture taps live-fed pre-EQ / sidechain; curves are
     //     message-thread state, never touched by the audio thread) ----------
@@ -109,6 +110,11 @@ private:
         std::atomic<float>* on    = nullptr;
         std::atomic<float>* solo  = nullptr;
         std::atomic<float>* channel = nullptr;
+        std::atomic<float>* dynOn    = nullptr;
+        std::atomic<float>* dynThresh = nullptr;
+        std::atomic<float>* dynRange  = nullptr;
+        std::atomic<float>* dynAttack = nullptr;
+        std::atomic<float>* dynRelease = nullptr;
     };
 
     void processEq (float* const* channels, int numChannels, int numSamples, double sr) noexcept;
@@ -124,6 +130,7 @@ private:
     std::array<BandDsp, numBands>                                bands;
     std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>, numBands> freqSm, qSm;
     std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>, numBands>          gainSm;
+    std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>, numBands>          rangeSm;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>                                outputSm;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>                        autoGainSm;
 
@@ -135,6 +142,7 @@ private:
     bool   lastMs         = false;                  // global-domain change detector
     std::array<int, numBands> lastChannel { };      // per-band lane change detector
     std::atomic<float> autoGainDb { 0.0f };
+    std::array<std::atomic<float>, numBands> dynGainDisplay { };
 
     AnalyzerFifo analyzer;
 

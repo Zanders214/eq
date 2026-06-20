@@ -29,6 +29,9 @@ shipping product is the JUCE plugin under `src/`.
   **Auto-gain** (loudness-matched output trim, shown live next to the toggle).
 - **Per-band channel lane** — within the global domain each band targets Both / first / second
   (L+R·L·R in Stereo, M+S·M·S in Mid-Side); non-Both bands show an L/R/M/S letter on their node.
+- **Dynamic EQ** (bell/shelf) — each band has a detector (band-pass + envelope follower) and a
+  threshold/range/attack/release so its gain reacts to level (de-ess, tame resonances, boost
+  transients). The curve animates live; a draggable handle on the node sets the dynamic range.
 - **EQ match** — capture a reference (sidechain input) and the source simultaneously, then
   fit the 6 bands to their tonal-balance difference (greedy peak-pick + weighted
   least-squares), with a Match Amount control and a ghost target curve. Result stays fully

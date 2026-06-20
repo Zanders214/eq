@@ -35,12 +35,15 @@ public:
     std::function<void()> onSelectionChanged;
 
 private:
-    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; int channel; };
+    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; int channel;
+                      bool dynOn; float range; float dynGain; };
 
     BandView readBand (int i) const;
     bool anySolo() const;
     int  nodeAtPosition (juce::Point<float>) const;
+    int  rangeHandleAt (juce::Point<float>) const;
     juce::Point<float> nodePosition (const BandView&) const;
+    float effectiveGain (const BandView& b) const { return b.gain + (b.dynOn ? b.dynGain : 0.0f); }
 
     int   spareBand() const;                 // first disabled band, or -1
     float snapToSpectrumPeak (float x) const; // nearest analyzer peak frequency
@@ -79,6 +82,7 @@ private:
     // drag state
     int dragBand = -1;
     bool draggingGain = false;
+    bool draggingRange = false;        // dragging a band's dynamic-range handle
     bool pendingGrab = false;          // mouse is down on empty graph, may become a grab
     juce::Point<float> grabDownPos;
 

@@ -6,19 +6,18 @@ oversampling and A/B. The features below are **proposed, not built** — they ar
 gap between this and FabFilter Pro-Q 3. Each is sketched with where it would land in
 the code. Tell me which to implement and I'll do them in priority order.
 
-## 1. Dynamic EQ (highest impact)
-Per-band downward/upward dynamics: each band gets `threshold`, `range`, `attack`,
-`release` and a detector. The band's effective gain becomes
-`staticGain + dynamicOffset(level)`, where the offset is driven by a per-band envelope
-follower on the band's own filtered signal (or a sidechain).
+## 1. Dynamic EQ ✅ (implemented — over-threshold, signed range)
+Each bell/shelf band has a detector (band-pass on its own region + peak envelope follower)
+and `dynon/threshold/range/attack/release`. Effective gain = `staticGain + dynamicGainDb(...)`,
+folded into `updateCoeffs` at the 32-sample control rate (detector runs per sample on the
+band's *input* to avoid self-feedback).
 
-- **DSP** (`PluginProcessor::processEq`): add an envelope follower per band; compute a
-  gain-reduction/expansion amount per sub-block and fold it into the band's `gainDb`
-  before `updateCoeffs`. Bands already recompute coefficients per 32-sample sub-block,
-  so this slots in cleanly and stays real-time safe.
-- **Params** (`Parameters.h`): `bandN_threshold/range/attack/release` + a `dynOn` toggle.
-- **UI** (`EqGraphComponent`): a second handle on the node for threshold/range, and a
-  moving "live gain" ghost on the curve. Rail gains a small dynamics sub-panel.
+- **DSP**: `makeBandpass` + `dynamicGainDb` (`dsp/EqMath.h`), detector state on `BandDsp`
+  (`dsp/Biquad.h`), wired into `processEq`. Unit-tested in `tests/DynamicsTests.cpp`.
+- **UI**: an EQ | DYN tab in the rail (threshold/range/attack/release + enable); the curve
+  animates with the live gain and the node carries a draggable dynamic-range handle.
+- *Follow-ups*: Over/Under (below-threshold) direction; auto-threshold; external/sidechain
+  detector; threshold-on-graph drag.
 
 ## 2. Per-band channel mode ✅ (implemented — domain-master model)
 The global Stereo/Mid-Side toggle is kept as a **domain master**; each band then targets a

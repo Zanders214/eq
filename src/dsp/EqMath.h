@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <algorithm>
 
 /*  EqMath — the single source of truth for the EQ's biquad math.
 
@@ -140,6 +141,30 @@ inline int stagesForSlope (FilterType type, int slopeDbPerOct) noexcept
     if (! isCut (type))
         return 1;
     return std::max (1, slopeDbPerOct / 12); // 12->1, 24->2, 48->4
+}
+
+// RBJ band-pass (constant 0 dB peak gain), normalised to a0 = 1 — the per-band
+// dynamic-EQ detector that isolates the band's own frequency region.
+inline BiquadCoeffs makeBandpass (double freq, double q, double sampleRate) noexcept
+{
+    const double w0    = 2.0 * kPi * freq / sampleRate;
+    const double cw    = std::cos (w0);
+    const double sw    = std::sin (w0);
+    const double alpha = sw / (2.0 * std::max (0.1, q));
+
+    const double b0 = alpha, b1 = 0.0, b2 = -alpha;
+    const double a0 = 1.0 + alpha, a1 = -2.0 * cw, a2 = 1.0 - alpha;
+    const double inv = 1.0 / a0;
+    return { b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv };
+}
+
+// Dynamic-EQ gain offset: 0 at/below threshold, easing to `rangeDb` over a soft
+// knee above it. Signed range (negative = cut when loud, positive = boost).
+inline double dynamicGainDb (double levelDb, double thresholdDb, double rangeDb,
+                             double kneeDb = 8.0) noexcept
+{
+    const double amount = std::clamp ((levelDb - thresholdDb) / std::max (0.5, kneeDb), 0.0, 1.0);
+    return rangeDb * amount;
 }
 
 // dB response of one band at frequency f, including the cut-filter cascade.

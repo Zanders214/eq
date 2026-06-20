@@ -51,6 +51,9 @@ EqGraphComponent::BandView EqGraphComponent::readBand (int i) const
     const bool solo = apvts.getRawParameterValue (ids::solo (i))->load() > 0.5f;
     b.live  = b.on && (! anySolo() || solo);
     b.channel = (int) apvts.getRawParameterValue (ids::channel (i))->load();
+    b.dynOn = apvts.getRawParameterValue (ids::dynOn (i))->load() > 0.5f && ! sitsOnZeroLine (b.type);
+    b.range = apvts.getRawParameterValue (ids::dynRange (i))->load();
+    b.dynGain = proc.getDynGainDb (i);
     return b;
 }
 
@@ -116,6 +119,23 @@ int EqGraphComponent::nodeAtPosition (juce::Point<float> p) const
         if (d < bestDist) { bestDist = d; best = i; }
     }
     return best;
+}
+
+// A dynamic-range handle, only when it has separated enough from its node.
+int EqGraphComponent::rangeHandleAt (juce::Point<float> p) const
+{
+    const float w = (float) getWidth(), h = (float) getHeight();
+    for (int i = 0; i < numBands; ++i)
+    {
+        const auto b = readBand (i);
+        if (! b.dynOn) continue;
+        const float x = freqToX (b.freq, w);
+        const float yStatic = gainToY (b.gain, h);
+        const float yRange  = gainToY (b.gain + b.range, h);
+        if (std::abs (yRange - yStatic) < 11.0f) continue;   // too close to the node
+        if (juce::Point<float> (x, yRange).getDistanceFrom (p) < 9.0f) return i;
+    }
+    return -1;
 }
 
 // ---- painting ---------------------------------------------------------------
@@ -224,7 +244,7 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
         const float f = xToFreq ((float) x, w);
         double db = 0.0;
         for (auto& b : bv)
-            db += bandMagnitudeDb (b.type, b.freq, b.gain, b.q, b.slope, b.live, f, sr);
+            db += bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
         const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
         if (x == 0) curve.startNewSubPath ((float) x, y); else curve.lineTo ((float) x, y);
     }
@@ -265,7 +285,7 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
         for (int x = 0; x <= (int) w; x += step)
         {
             const float f = xToFreq ((float) x, w);
-            const double db = bandMagnitudeDb (b.type, b.freq, b.gain, b.q, b.slope, b.live, f, sr);
+            const double db = bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
             const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
             if (x == 0) bp.startNewSubPath ((float) x, y); else bp.lineTo ((float) x, y);
         }
@@ -327,12 +347,43 @@ void EqGraphComponent::drawNodes (juce::Graphics& g)
             g.drawText (letter, juce::Rectangle<float> (bp.x - br, bp.y - br, br * 2, br * 2),
                         juce::Justification::centred);
         }
+
+        // dynamic-EQ: range bracket + draggable handle + live-gain dot
+        if (b.dynOn)
+        {
+            const float h = (float) getHeight();
+            const float yRange = juce::jlimit (-2.0f, h + 2.0f, gainToY (b.gain + b.range, h));
+            const float yLive  = juce::jlimit (-2.0f, h + 2.0f, gainToY (b.gain + b.dynGain, h));
+            g.setColour (col.withAlpha (0.45f));
+            g.drawLine (pos.x, pos.y, pos.x, yRange, 1.5f);
+            g.setColour (col.withAlpha (0.25f));
+            g.fillEllipse (pos.x - 5.0f, yRange - 5.0f, 10.0f, 10.0f);
+            g.setColour (col);
+            g.drawEllipse (pos.x - 5.0f, yRange - 5.0f, 10.0f, 10.0f, 1.5f);
+            g.setColour (juce::Colours::white);
+            g.fillEllipse (pos.x - 2.5f, yLive - 2.5f, 5.0f, 5.0f);
+        }
     }
 }
 
 // ---- interaction ------------------------------------------------------------
 void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // dynamic-range handle takes priority over the node beneath it
+    const int rh = rangeHandleAt (e.position);
+    if (rh >= 0)
+    {
+        if (rh != proc.getSelectedBand())
+        {
+            proc.setSelectedBand (rh);
+            if (onSelectionChanged) onSelectionChanged();
+        }
+        dragBand = rh;
+        draggingRange = true;
+        beginGesture (ids::dynRange (rh));
+        return;
+    }
+
     const int b = nodeAtPosition (e.position);
     if (b >= 0)
     {
@@ -358,6 +409,14 @@ void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
 void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 {
     const float w = (float) getWidth(), h = (float) getHeight();
+
+    if (draggingRange && dragBand >= 0)
+    {
+        const float staticGain = readBand (dragBand).gain;
+        const float y = juce::jlimit (0.0f, h, e.position.y);
+        setParam (ids::dynRange (dragBand), juce::jlimit (-30.0f, 30.0f, yToGain (y, h) - staticGain));
+        return;
+    }
 
     // Promote a press-on-empty into a spectrum grab once the user actually drags.
     if (dragBand < 0 && pendingGrab && e.position.getDistanceFrom (grabDownPos) > 4.0f)
@@ -385,6 +444,13 @@ void EqGraphComponent::mouseUp (const juce::MouseEvent&)
 {
     pendingGrab = false;
     if (dragBand < 0) return;
+    if (draggingRange)
+    {
+        endGesture (ids::dynRange (dragBand));
+        draggingRange = false;
+        dragBand = -1;
+        return;
+    }
     endGesture (ids::freq (dragBand));
     if (draggingGain) endGesture (ids::gain (dragBand));
     dragBand = -1;

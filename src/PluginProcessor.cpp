@@ -15,6 +15,8 @@ namespace
             fn (ids::type (i));  fn (ids::freq (i)); fn (ids::gain (i));
             fn (ids::q (i));     fn (ids::slope (i)); fn (ids::on (i));
             fn (ids::solo (i));  fn (ids::channel (i));
+            fn (ids::dynOn (i)); fn (ids::dynThresh (i)); fn (ids::dynRange (i));
+            fn (ids::dynAttack (i)); fn (ids::dynRelease (i));
         }
         fn (ids::output); fn (ids::mode); fn (ids::hq); fn (ids::autogain); fn (ids::matchamount);
     }
@@ -37,6 +39,11 @@ ZandersEqAudioProcessor::ZandersEqAudioProcessor()
         bandParams[(size_t) i].on    = apvts.getRawParameterValue (ids::on (i));
         bandParams[(size_t) i].solo  = apvts.getRawParameterValue (ids::solo (i));
         bandParams[(size_t) i].channel = apvts.getRawParameterValue (ids::channel (i));
+        bandParams[(size_t) i].dynOn    = apvts.getRawParameterValue (ids::dynOn (i));
+        bandParams[(size_t) i].dynThresh = apvts.getRawParameterValue (ids::dynThresh (i));
+        bandParams[(size_t) i].dynRange  = apvts.getRawParameterValue (ids::dynRange (i));
+        bandParams[(size_t) i].dynAttack = apvts.getRawParameterValue (ids::dynAttack (i));
+        bandParams[(size_t) i].dynRelease = apvts.getRawParameterValue (ids::dynRelease (i));
     }
     outputParam   = apvts.getRawParameterValue (ids::output);
     modeParam     = apvts.getRawParameterValue (ids::mode);
@@ -61,12 +68,15 @@ void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
         freqSm[(size_t) i].reset (smootherRate, ramp);
         gainSm[(size_t) i].reset (smootherRate, ramp);
         qSm  [(size_t) i].reset (smootherRate, ramp);
+        rangeSm[(size_t) i].reset (smootherRate, ramp);
         freqSm[(size_t) i].setCurrentAndTargetValue (bandParams[(size_t) i].freq->load());
         gainSm[(size_t) i].setCurrentAndTargetValue (bandParams[(size_t) i].gain->load());
         qSm  [(size_t) i].setCurrentAndTargetValue (bandParams[(size_t) i].q->load());
+        rangeSm[(size_t) i].setCurrentAndTargetValue (bandParams[(size_t) i].dynRange->load());
         bands[(size_t) i].reset();
         bands[(size_t) i].active = false;
         lastChannel[(size_t) i] = -1;
+        dynGainDisplay[(size_t) i].store (0.0f);
     }
     lastMs = false;
     outputSm.reset (baseSampleRate, ramp);
@@ -146,6 +156,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
             freqSm[(size_t) i].reset (procRate, ramp);
             gainSm[(size_t) i].reset (procRate, ramp);
             qSm  [(size_t) i].reset (procRate, ramp);
+            rangeSm[(size_t) i].reset (procRate, ramp);
         }
         smootherRate = procRate;   // output/auto-gain stay at base rate (applied post-downsample)
     }
@@ -155,6 +166,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         freqSm[(size_t) i].setTargetValue (bandParams[(size_t) i].freq->load());
         gainSm[(size_t) i].setTargetValue (bandParams[(size_t) i].gain->load());
         qSm  [(size_t) i].setTargetValue (bandParams[(size_t) i].q->load());
+        rangeSm[(size_t) i].setTargetValue (bandParams[(size_t) i].dynRange->load());
     }
     outputSm.setTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
 
@@ -244,7 +256,8 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
         lastMs = ms;
     }
 
-    std::array<int, numBands> lane {};   // resolved per-band lane for this sub-block
+    std::array<int, numBands>  lane {};   // resolved per-band lane for this sub-block
+    std::array<bool, numBands> dyn {};    // per-band dynamics active this sub-block
 
     int pos = 0;
     while (pos < numSamples)
@@ -256,7 +269,8 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
             const float f = freqSm[(size_t) i].getNextValue();
             const float g = gainSm[(size_t) i].getNextValue();
             const float qq = qSm[(size_t) i].getNextValue();
-            if (len > 1) { freqSm[(size_t) i].skip (len - 1); gainSm[(size_t) i].skip (len - 1); qSm[(size_t) i].skip (len - 1); }
+            const float rng = rangeSm[(size_t) i].getNextValue();
+            if (len > 1) { freqSm[(size_t) i].skip (len - 1); gainSm[(size_t) i].skip (len - 1); qSm[(size_t) i].skip (len - 1); rangeSm[(size_t) i].skip (len - 1); }
 
             const auto type   = static_cast<FilterType> ((int) bandParams[(size_t) i].type->load());
             const int  slope  = slopeIndexToValue ((int) bandParams[(size_t) i].slope->load());
@@ -275,8 +289,29 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
             }
             lastChannel[(size_t) i] = chMode;
 
+            // Dynamic EQ (bell/shelf only): fold the detector-driven offset into gain.
+            const bool dynActive = active && bandParams[(size_t) i].dynOn->load() > 0.5f && ! sitsOnZeroLine (type);
+            dyn[(size_t) i] = dynActive;
+            float effGain = g;
+            if (dynActive)
+            {
+                const double levelDb = juce::Decibels::gainToDecibels (bands[(size_t) i].env + 1.0e-9f);
+                const double offs = dynamicGainDb (levelDb, (double) bandParams[(size_t) i].dynThresh->load(), (double) rng);
+                effGain = g + (float) offs;
+                bands[(size_t) i].dynGainDb = (float) offs;
+                bands[(size_t) i].updateDetector (f, juce::jlimit (0.5f, 4.0f, qq),
+                                                  (double) bandParams[(size_t) i].dynAttack->load(),
+                                                  (double) bandParams[(size_t) i].dynRelease->load(), sr);
+                dynGainDisplay[(size_t) i].store ((float) offs);
+            }
+            else
+            {
+                bands[(size_t) i].dynGainDb = 0.0f;
+                dynGainDisplay[(size_t) i].store (0.0f);
+            }
+
             if (active)
-                bands[(size_t) i].updateCoeffs (type, f, g, qq, slope, sr);
+                bands[(size_t) i].updateCoeffs (type, f, effGain, qq, slope, sr);
         }
 
         if (stereo)
@@ -290,7 +325,11 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
                 float b = ms ? 0.5f * (L[s] - R[s]) : R[s];
                 for (int i = 0; i < numBands; ++i)
                     if (bands[(size_t) i].active)
+                    {
+                        if (dyn[(size_t) i])
+                            bands[(size_t) i].pushDetector (0.5f * (a + b)); // detect on the band's input
                         applyBand (bands[(size_t) i], lane[(size_t) i], a, b);
+                    }
                 if (ms) { L[s] = a + b; R[s] = a - b; }
                 else    { L[s] = a;     R[s] = b;     }
             }
@@ -303,7 +342,11 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
                 float x = M[s];
                 for (int i = 0; i < numBands; ++i)
                     if (bands[(size_t) i].active)
+                    {
+                        if (dyn[(size_t) i])
+                            bands[(size_t) i].pushDetector (x);
                         x = bands[(size_t) i].processSample (0, x);
+                    }
                 M[s] = x;
             }
         }

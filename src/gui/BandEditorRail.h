@@ -31,9 +31,10 @@ private:
 
     struct Layout
     {
-        juce::Rectangle<int> header, typeChips, freqBlock, gainBlock, qBlock,
+        juce::Rectangle<int> header, eqTab, dynTab, typeChips, freqBlock, gainBlock, qBlock,
                              slopeRow, onSolo, channelRow, bottom, dial, modeBtn, hqBtn, autoBtn,
-                             matchLabel, matchAmtRow, matchBtnRow, captureBtn, matchBtn;
+                             matchLabel, matchAmtRow, matchBtnRow, captureBtn, matchBtn,
+                             dynEnable, dynS0, dynS1, dynS2, dynS3;
     };
     Layout computeLayout() const;
 
@@ -49,8 +50,11 @@ private:
     juce::AudioProcessorValueTreeState& apvts;
 
     juce::Slider freqSlider, gainSlider, qSlider, outputDial, matchAmountSlider;
+    juce::Slider threshSlider, rangeSlider, attackSlider, releaseSlider;
     std::unique_ptr<Attachment> freqAtt, gainAtt, qAtt, outAtt, matchAmtAtt;
+    std::unique_ptr<Attachment> threshAtt, rangeAtt, attackAtt, releaseAtt;
 
+    bool showDyn = false;
     int lastSelected = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandEditorRail)

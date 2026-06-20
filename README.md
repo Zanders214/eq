@@ -70,8 +70,9 @@ sudo apt-get install libasound2-dev libjack-jackd2-dev libfreetype-dev libfontco
 
 ### Platforms
 
-`VST3` and `Standalone` build everywhere; `AU` is added automatically on macOS. The design
-targets a fixed 1100×690 panel.
+`VST3` and `Standalone` build everywhere; `AU` is added automatically on macOS. The 1100×772
+design panel is **resizable** — the whole UI scales uniformly (aspect-locked, ~0.6×–1.7×),
+and the chosen size is remembered with the plugin state.
 
 ## Project layout
 

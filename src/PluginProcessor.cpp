@@ -406,6 +406,7 @@ void ZandersEqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("selectedBand", selectedBand.load(), nullptr);
+    state.setProperty ("editorWidth", editorWidth, nullptr);
     state.setProperty ("abSlot", abSlot, nullptr);
     state.removeChild (state.getChildWithName ("ABOther"), nullptr);
     state.appendChild (abStored.createCopy(), nullptr);
@@ -431,6 +432,7 @@ void ZandersEqAudioProcessor::setStateInformation (const void* data, int sizeInB
         return;
 
     selectedBand.store (juce::jlimit (0, numBands - 1, (int) tree.getProperty ("selectedBand", 3)));
+    editorWidth = juce::jlimit (660, 1870, (int) tree.getProperty ("editorWidth", 1100));
     abSlot = tree.getProperty ("abSlot", "A").toString();
 
     auto stored = tree.getChildWithName ("ABOther");

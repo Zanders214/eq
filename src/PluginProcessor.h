@@ -93,6 +93,8 @@ public:
     // Editor/UI state that should persist but isn't host-automatable.
     int  getSelectedBand() const noexcept       { return selectedBand.load(); }
     void setSelectedBand (int i) noexcept        { selectedBand.store (juce::jlimit (0, numBands - 1, i)); }
+    int  getEditorWidth() const noexcept         { return editorWidth; }
+    void setEditorWidth (int w) noexcept         { editorWidth = w; }
     juce::String getCurrentSlot() const          { return abSlot; }
     void toggleABSlot (const juce::String& slot); // swaps the live params with the stored A/B snapshot
 
@@ -156,6 +158,7 @@ private:
 
     // Non-automated, persisted UI state.
     std::atomic<int> selectedBand { 3 };
+    int              editorWidth { 1100 };       // persisted UI size (message-thread)
     juce::String     abSlot { "A" };
     juce::ValueTree  abStored { "ABOther" }; // snapshot of the inactive slot
 

@@ -38,8 +38,13 @@ shipping product is the JUCE plugin under `src/`.
   fit the 6 bands to their tonal-balance difference (greedy peak-pick + weighted
   least-squares), with a Match Amount control and a ghost target curve. Result stays fully
   editable. Fitter is unit-tested (`-DZEQ_BUILD_TESTS=ON`).
-- **A/B** compare slots and the six README presets (Flat, Vocal Air, De-Mud, Bass Tight,
-  Lo-Fi, Bright).
+- **A/B** compare slots and six built-in presets (Flat, Vocal Air, De-Mud, Bass Tight,
+  Lo-Fi, Bright), plus **user presets** — SAVE the full state to a named `.zeqpreset` file and
+  recall / delete them from the LOAD menu (round-trip unit-tested).
+- **Undo/redo** of every edit — Ctrl-Z / Ctrl-Shift-Z (and header buttons); one step per
+  gesture across the curve, rail, strip and presets.
+- **Node conveniences** — right-click a node to bypass its band, Alt-drag to move gain only,
+  and a musical-note readout (A4 = 440) next to every frequency.
 - All parameter changes are smoothed (no zipper noise); `processBlock` is real-time safe
   (no allocations or locks).
 - Brand fonts (Space Grotesk + JetBrains Mono, both OFL) are bundled as binary data, so the

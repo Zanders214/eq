@@ -16,6 +16,7 @@ EqContent::EqContent (ZandersEqAudioProcessor& p)
     : proc (p), graph (p), strip (p), presetBar (p), rail (p)
 {
     setLookAndFeel (&lnf);
+    setWantsKeyboardFocus (true);   // so Ctrl-Z / Ctrl-Shift-Z reach keyPressed
 
     addAndMakeVisible (graph);
     addAndMakeVisible (strip);
@@ -74,6 +75,13 @@ void EqContent::resized()
     auto ab = hr.removeFromRight (74).reduced (0, -1);
     abA = ab.removeFromLeft (37);
     abB = ab;
+
+    // Undo / redo buttons sit just left of the OUT readout (OUT box is laid out in
+    // drawHeader at abA.getX() - 116) — plenty of empty header space there.
+    const int outLeft = abA.getX() - 116;
+    const int bw = 26, bh = 22, cy = headerBounds.getCentreY();
+    redoBtn = juce::Rectangle<int> (outLeft - 10 - bw,       cy - bh / 2, bw, bh);
+    undoBtn = juce::Rectangle<int> (redoBtn.getX() - 4 - bw, cy - bh / 2, bw, bh);
 }
 
 void EqContent::paint (juce::Graphics& g)
@@ -143,6 +151,23 @@ void EqContent::drawHeader (juce::Graphics& g)
     g.drawText ((out >= 0 ? "+" : "") + juce::String (out, 1) + " dB",
                 outBox.withTrimmedRight (10), juce::Justification::centredRight);
 
+    // Undo / redo (back / forward arrows; dim when nothing is available)
+    auto drawHistBtn = [&] (juce::Rectangle<int> ri, bool enabled, bool redo)
+    {
+        auto r = ri.toFloat();
+        g.setColour (theme::well);
+        g.fillRoundedRectangle (r, 6.0f);
+        g.setColour (whiteAlpha (0.08f));
+        g.drawRoundedRectangle (r.reduced (0.5f), 6.0f, 1.0f);
+        g.setColour ((enabled ? accent : text1).withAlpha (enabled ? 0.95f : 0.22f));
+        const float my = r.getCentreY(), x0 = r.getX() + 8.0f, x1 = r.getRight() - 8.0f;
+        const juce::Line<float> ln = redo ? juce::Line<float> (x0, my, x1, my)
+                                          : juce::Line<float> (x1, my, x0, my);
+        g.drawArrow (ln, 1.6f, 6.5f, 6.0f);
+    };
+    drawHistBtn (undoBtn, proc.canUndo(), false);
+    drawHistBtn (redoBtn, proc.canRedo(), true);
+
     // A/B toggle
     const bool isA = proc.getCurrentSlot() == "A";
     auto drawAB = [&] (juce::Rectangle<int> r, const char* label, bool active)
@@ -172,8 +197,31 @@ void EqContent::drawHeader (juce::Graphics& g)
 
 void EqContent::mouseDown (const juce::MouseEvent& e)
 {
-    if (abA.contains (e.getPosition())) { proc.toggleABSlot ("A"); rail.bindToSelected(); repaint(); }
+    grabKeyboardFocus();   // clicking the header reclaims focus for the shortcuts
+    if (undoBtn.contains (e.getPosition()))      { proc.undo(); rail.bindToSelected(); repaint(); }
+    else if (redoBtn.contains (e.getPosition())) { proc.redo(); rail.bindToSelected(); repaint(); }
+    else if (abA.contains (e.getPosition())) { proc.toggleABSlot ("A"); rail.bindToSelected(); repaint(); }
     else if (abB.contains (e.getPosition())) { proc.toggleABSlot ("B"); rail.bindToSelected(); repaint(); }
+}
+
+bool EqContent::keyPressed (const juce::KeyPress& k)
+{
+    if (! k.getModifiers().isCommandDown())   // Ctrl on Win/Linux, Cmd on macOS
+        return false;
+
+    const int code = k.getKeyCode();
+    if (code == (int) 'Z')
+    {
+        if (k.getModifiers().isShiftDown()) proc.redo(); else proc.undo();
+        rail.bindToSelected(); repaint();
+        return true;
+    }
+    if (code == (int) 'Y')   // common Windows redo
+    {
+        proc.redo(); rail.bindToSelected(); repaint();
+        return true;
+    }
+    return false;
 }
 
 // ============================ ZandersEqEditor (host) ========================

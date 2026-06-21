@@ -67,6 +67,8 @@ BandEditorRail::BandEditorRail (ZandersEqAudioProcessor& p)
         s.setSliderStyle (juce::Slider::LinearHorizontal);
         s.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
         s.getProperties().set ("gradient", gradient);
+        s.onDragStart = [this] { proc.beginUndoTransaction(); };  // one undo step per drag
+        s.onDragEnd   = [this] { proc.commitUndoTransaction(); };
         addAndMakeVisible (s);
     };
     setupSlider (freqSlider, "cool");
@@ -78,6 +80,8 @@ BandEditorRail::BandEditorRail (ZandersEqAudioProcessor& p)
     const float pi = juce::MathConstants<float>::pi;
     outputDial.setRotaryParameters (pi * 1.25f, pi * 2.75f, true);
     addAndMakeVisible (outputDial);
+    outputDial.onDragStart = [this] { proc.beginUndoTransaction(); };
+    outputDial.onDragEnd   = [this] { proc.commitUndoTransaction(); };
     outAtt = std::make_unique<Attachment> (apvts, ids::output, outputDial);
 
     setupSlider (matchAmountSlider, "accent");
@@ -100,13 +104,19 @@ FilterType BandEditorRail::selectedType() const
 
 void BandEditorRail::setChoice (const juce::String& id, int idx)
 {
-    if (auto* p = apvts.getParameter (id))
-        p->setValueNotifyingHost (p->convertTo0to1 ((float) idx));
+    proc.recordUndoableEdit ([&]
+    {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 ((float) idx));
+    });
 }
 void BandEditorRail::setBool (const juce::String& id, bool v)
 {
-    if (auto* p = apvts.getParameter (id))
-        p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+    proc.recordUndoableEdit ([&]
+    {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+    });
 }
 
 void BandEditorRail::bindToSelected()
@@ -286,7 +296,7 @@ void BandEditorRail::paint (juce::Graphics& g)
     };
     if (! showDyn)
     {
-        drawSliderHead (L.freqBlock, "FREQUENCY", fmtFreq (freq), false);
+        drawSliderHead (L.freqBlock, "FREQUENCY", fmtFreq (freq) + "  " + noteName (freq), false);
         drawSliderHead (L.gainBlock, "GAIN", cut ? juce::String ("—") : fmtGain (gain), cut);
         drawSliderHead (L.qBlock, "Q / SLOPE",
                         cut ? juce::String (slope) + " dB/oct  Q" + juce::String (q, 2)

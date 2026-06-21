@@ -363,27 +363,89 @@ juce::AudioProcessorEditor* ZandersEqAudioProcessor::createEditor()
     return new ZandersEqEditor (*this);
 }
 
+// Fill `dest` with the normalised value of every host-automatable parameter.
+void ZandersEqAudioProcessor::snapshotInto (juce::ValueTree& dest) const
+{
+    forEachParamId ([&] (const juce::String& id)
+    {
+        if (auto* p = apvts.getParameter (id))
+            dest.setProperty (id, p->getValue(), nullptr);
+    });
+}
+
+juce::ValueTree ZandersEqAudioProcessor::captureParams() const
+{
+    juce::ValueTree t ("ParamSnapshot");
+    snapshotInto (t);
+    return t;
+}
+
+void ZandersEqAudioProcessor::applyParams (const juce::ValueTree& snapshot)
+{
+    forEachParamId ([&] (const juce::String& id)
+    {
+        if (snapshot.hasProperty (id))
+            if (auto* p = apvts.getParameter (id))
+                p->setValueNotifyingHost ((float) snapshot.getProperty (id));
+    });
+}
+
 void ZandersEqAudioProcessor::toggleABSlot (const juce::String& slot)
 {
     if (slot == abSlot)
         return;
 
     juce::ValueTree current ("ABOther");
-    forEachParamId ([&] (const juce::String& id)
-    {
-        if (auto* p = apvts.getParameter (id))
-            current.setProperty (id, p->getValue(), nullptr);
-    });
-
-    forEachParamId ([&] (const juce::String& id)
-    {
-        if (abStored.hasProperty (id))
-            if (auto* p = apvts.getParameter (id))
-                p->setValueNotifyingHost ((float) abStored.getProperty (id));
-    });
-
+    snapshotInto (current);          // remember the live params for this slot
+    applyParams (abStored);          // load the other slot's params
     abStored = current;
     abSlot = slot;
+}
+
+void ZandersEqAudioProcessor::beginUndoTransaction()
+{
+    pendingUndo = captureParams();
+}
+
+void ZandersEqAudioProcessor::commitUndoTransaction()
+{
+    if (! pendingUndo.isValid())
+        return;
+    if (! captureParams().isEquivalentTo (pendingUndo))   // ignore no-op gestures (e.g. a click)
+    {
+        undoStack.push_back (pendingUndo);
+        if ((int) undoStack.size() > maxUndo)
+            undoStack.erase (undoStack.begin());
+        redoStack.clear();
+    }
+    pendingUndo = {};
+}
+
+void ZandersEqAudioProcessor::recordUndoableEdit (std::function<void()> edit)
+{
+    beginUndoTransaction();
+    if (edit) edit();
+    commitUndoTransaction();
+}
+
+void ZandersEqAudioProcessor::undo()
+{
+    if (undoStack.empty())
+        return;
+    redoStack.push_back (captureParams());
+    const auto snapshot = undoStack.back();
+    undoStack.pop_back();
+    applyParams (snapshot);
+}
+
+void ZandersEqAudioProcessor::redo()
+{
+    if (redoStack.empty())
+        return;
+    undoStack.push_back (captureParams());
+    const auto snapshot = redoStack.back();
+    redoStack.pop_back();
+    applyParams (snapshot);
 }
 
 void ZandersEqAudioProcessor::storeCaptureCurve (CaptureSlot s, const float* power, int n)

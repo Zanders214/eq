@@ -75,6 +75,17 @@ inline juce::String fmtFreq (float f)
     return juce::String (f / 1000.0f, f < 10000.0f ? 2 : 1) + " kHz";
 }
 
+// Nearest equal-tempered note name (12-TET, A4 = 440 Hz), e.g. 2637 Hz -> "E7".
+inline juce::String noteName (float f)
+{
+    if (f <= 0.0f)
+        return {};
+    static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    const int midi = juce::roundToInt (69.0f + 12.0f * std::log2 (f / 440.0f));
+    const int idx  = ((midi % 12) + 12) % 12;   // wrap negatives for very low notes
+    return juce::String (names[idx]) + juce::String (midi / 12 - 1);
+}
+
 inline juce::String fmtGain (float g)
 {
     return (g >= 0.0f ? "+" : "") + juce::String (g, 1) + " dB";

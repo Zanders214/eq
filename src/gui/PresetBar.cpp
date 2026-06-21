@@ -45,7 +45,7 @@ void PresetBar::mouseDown (const juce::MouseEvent& e)
     {
         if (chipBounds (i).contains (e.position))
         {
-            applyPreset (apvts, list[(size_t) i]);
+            proc.recordUndoableEdit ([&] { applyPreset (apvts, list[(size_t) i]); });
             if (onPresetApplied) onPresetApplied();
             repaint();
             return;

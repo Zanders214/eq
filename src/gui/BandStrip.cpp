@@ -74,7 +74,7 @@ void BandStrip::paint (juce::Graphics& g)
         inner.removeFromTop (6.0f);
         g.setColour (on ? text1 : text1.withAlpha (0.5f));
         g.setFont (Fonts::mono (13.0f, true));
-        g.drawText (fmtFreq (freq), inner.removeFromTop (15.0f), juce::Justification::centredLeft);
+        g.drawText (fmtFreq (freq) + "  " + noteName (freq), inner.removeFromTop (15.0f), juce::Justification::centredLeft);
 
         inner.removeFromTop (2.0f);
         g.setColour (text3);
@@ -103,8 +103,11 @@ void BandStrip::mouseDown (const juce::MouseEvent& e)
         if (pillBounds (cell).contains (e.position))
         {
             const bool on = apvts.getRawParameterValue (ids::on (i))->load() > 0.5f;
-            if (auto* p = apvts.getParameter (ids::on (i)))
-                p->setValueNotifyingHost (on ? 0.0f : 1.0f);
+            proc.recordUndoableEdit ([&]
+            {
+                if (auto* p = apvts.getParameter (ids::on (i)))
+                    p->setValueNotifyingHost (on ? 0.0f : 1.0f);
+            });
         }
         else if (i != proc.getSelectedBand())
         {

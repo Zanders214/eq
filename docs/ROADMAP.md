@@ -58,10 +58,14 @@ trim. See `PluginProcessor::processBlock`. Possible follow-up: switch the detect
 to an LUFS/K-weighted measure.
 
 ## Smaller polish
-- Piano-key / note readout next to the frequency value.
-- Per-band bypass via right-click on a node; alt-drag to constrain to gain-only.
+- ✅ Piano-key / note readout next to the frequency value (12-TET, A4 = 440; rail + strip).
+- ✅ Per-band bypass via right-click on a node; alt-drag to constrain to gain-only.
 - ✅ Resizable / scalable UI — the editor hosts the fixed-design panel in a scaled content
   component (aspect-locked uniform zoom, ~0.6×–1.7×), size persisted with the plugin state.
-- Undo/redo via `UndoManager` on the APVTS.
+- ✅ Undo/redo — whole-parameter snapshots (reusing the A/B capture/restore), Ctrl-Z /
+  Ctrl-Shift-Z + header buttons, one step per gesture. (Chosen over an APVTS `UndoManager` so
+  it stays synchronous and headless-testable.)
+- ✅ User presets — save/recall the full state to `.zeqpreset` files (SAVE + LOAD in the preset
+  bar); round-trip unit-tested. Follow-up: a richer browser, factory-preset bundling.
 - ✅ CI: GitHub Actions builds + runs the unit tests + `pluginval` strictness 10 on every push
   (`.github/workflows/ci.yml`). Follow-up: macOS/Windows runners; pin pluginval; LTO-off on PRs.

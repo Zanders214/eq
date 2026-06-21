@@ -107,6 +107,15 @@ public:
     void undo();
     void redo();
 
+    // --- User presets (full-state snapshot <-> .zeqpreset files) --------------
+    juce::File userPresetsDir() const;                       // created if missing
+    bool savePresetToFile (const juce::File&) const;         // current params -> XML file
+    bool loadPresetFromFile (const juce::File&);             // file -> params (undoable)
+    bool saveUserPreset (const juce::String& name);          // name -> dir/<name>.zeqpreset
+    bool deleteUserPreset (const juce::File&);
+    juce::Array<juce::File> listUserPresets() const;         // sorted *.zeqpreset
+    static juce::String presetExtension() { return ".zeqpreset"; }
+
     static juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() { return createParameterLayout(); }
 
 private:

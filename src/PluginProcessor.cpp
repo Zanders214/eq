@@ -448,6 +448,57 @@ void ZandersEqAudioProcessor::redo()
     applyParams (snapshot);
 }
 
+// --- User presets ----------------------------------------------------------
+juce::File ZandersEqAudioProcessor::userPresetsDir() const
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("Neon Plugins").getChildFile ("ZandersEQ").getChildFile ("Presets");
+    dir.createDirectory();
+    return dir;
+}
+
+bool ZandersEqAudioProcessor::savePresetToFile (const juce::File& file) const
+{
+    if (auto xml = captureParams().createXml())
+        return xml->writeTo (file);
+    return false;
+}
+
+bool ZandersEqAudioProcessor::loadPresetFromFile (const juce::File& file)
+{
+    auto xml = juce::XmlDocument::parse (file);
+    if (xml == nullptr)
+        return false;
+    auto tree = juce::ValueTree::fromXml (*xml);
+    if (! tree.isValid())
+        return false;
+    recordUndoableEdit ([&] { applyParams (tree); });   // loading a preset is one undo step
+    return true;
+}
+
+bool ZandersEqAudioProcessor::saveUserPreset (const juce::String& name)
+{
+    const auto clean = juce::File::createLegalFileName (name).trim();
+    if (clean.isEmpty())
+        return false;
+    return savePresetToFile (userPresetsDir().getChildFile (clean + presetExtension()));
+}
+
+bool ZandersEqAudioProcessor::deleteUserPreset (const juce::File& file)
+{
+    return file.existsAsFile() && file.deleteFile();
+}
+
+juce::Array<juce::File> ZandersEqAudioProcessor::listUserPresets() const
+{
+    auto files = userPresetsDir().findChildFiles (juce::File::findFiles, false, "*" + presetExtension());
+    struct Cmp { static int compareElements (const juce::File& a, const juce::File& b)
+                 { return a.getFileNameWithoutExtension().compareIgnoreCase (b.getFileNameWithoutExtension()); } };
+    Cmp cmp;
+    files.sort (cmp);
+    return files;
+}
+
 void ZandersEqAudioProcessor::storeCaptureCurve (CaptureSlot s, const float* power, int n)
 {
     auto& dst = (s == CaptureSlot::source) ? srcCurve : refCurve;

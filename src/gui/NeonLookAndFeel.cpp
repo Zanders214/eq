@@ -32,6 +32,25 @@ NeonLookAndFeel::NeonLookAndFeel()
 {
     setColour (juce::Slider::textBoxTextColourId, theme::text2);
     setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+
+    // Dark, on-brand styling for the (otherwise default-V4) transient windows used
+    // by user presets: the load PopupMenu, the save AlertWindow and its TextEditor.
+    setColour (juce::PopupMenu::backgroundColourId,          theme::panelBase);
+    setColour (juce::PopupMenu::textColourId,                theme::text1);
+    setColour (juce::PopupMenu::headerTextColourId,          theme::textLabel);
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, theme::accent.withAlpha (0.30f));
+    setColour (juce::PopupMenu::highlightedTextColourId,     juce::Colours::white);
+
+    setColour (juce::TextEditor::backgroundColourId,         theme::well);
+    setColour (juce::TextEditor::textColourId,               theme::text1);
+    setColour (juce::TextEditor::outlineColourId,            theme::whiteAlpha (0.12f));
+    setColour (juce::TextEditor::focusedOutlineColourId,     theme::accent);
+    setColour (juce::TextEditor::highlightColourId,          theme::accent.withAlpha (0.30f));
+    setColour (juce::CaretComponent::caretColourId,          theme::accent);
+
+    setColour (juce::AlertWindow::backgroundColourId,        theme::panelTop);
+    setColour (juce::AlertWindow::textColourId,              theme::text1);
+    setColour (juce::AlertWindow::outlineColourId,           theme::whiteAlpha (0.10f));
 }
 
 void NeonLookAndFeel::glow (juce::Graphics& g, juce::Rectangle<float> b, juce::Colour c,

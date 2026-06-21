@@ -491,6 +491,43 @@ int main()
         check (theme::noteName (27.5f)   == "A0",  "noteName(27.5) == A0");
     }
 
+    // --- 12. User preset save / load round-trip ----------------------------
+    // Hermetic: serialize to a temp file rather than the real user presets dir.
+    {
+        ZandersEqAudioProcessor p;
+        auto setNorm = [&] (const juce::String& id, float real)
+        {
+            if (auto* pp = p.getApvts().getParameter (id))
+                pp->setValueNotifyingHost (pp->convertTo0to1 (real));
+        };
+        auto raw = [&] (const juce::String& id) { return (double) p.getApvts().getRawParameterValue (id)->load(); };
+
+        setNorm (ids::gain (2), -7.0f);
+        setNorm (ids::freq (2), 333.0f);
+        setNorm (ids::mode, 1.0f);              // a global, too
+
+        const auto tmp = juce::File::createTempFile (".zeqpreset");
+        check (p.savePresetToFile (tmp),            "savePresetToFile succeeds");
+        check (tmp.existsAsFile() && tmp.getSize() > 0, "preset file written");
+        check (juce::XmlDocument::parse (tmp) != nullptr, "preset file is valid XML");
+
+        // mutate, then reload the preset
+        setNorm (ids::gain (2), 4.0f);
+        setNorm (ids::freq (2), 9000.0f);
+        setNorm (ids::mode, 0.0f);
+        check (p.loadPresetFromFile (tmp),          "loadPresetFromFile succeeds");
+        check (within (raw (ids::gain (2)), -7.0, 0.02), "preset restores band gain", raw (ids::gain (2)));
+        check (within (raw (ids::freq (2)), 333.0, 0.5), "preset restores band freq", raw (ids::freq (2)));
+        check (within (raw (ids::mode),  1.0, 0.02),     "preset restores a global param", raw (ids::mode));
+
+        // loading a preset is a single undoable step
+        check (p.canUndo(),                          "loading a preset is undoable");
+        p.undo();
+        check (within (raw (ids::gain (2)), 4.0, 0.02), "undo reverts a preset load", raw (ids::gain (2)));
+
+        tmp.deleteFile();
+    }
+
     std::printf ("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED",
                  failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;

@@ -64,5 +64,8 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # enables PR decoration
         with:
-          args: >
-            --define sonar.qualitygate.wait=true
+          # Clean as You Code: block the build on a failing quality gate only for pull requests,
+          # where it prevents bad code from being merged. On mainline pushes (and manual runs) we
+          # publish the analysis without waiting, so a post-merge gate status never holds `dev` red.
+          args: >-
+            ${{ github.event_name == 'pull_request' && '--define sonar.qualitygate.wait=true' || '' }}

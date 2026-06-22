@@ -16,6 +16,7 @@ endif()
 
 option(ZEQ_BUILD_STANDALONE "Build the Standalone target (handy for testing)" ON)
 option(ZEQ_BUILD_TESTS "Build the MatchFit unit-test executable" OFF)
+option(ZEQ_COVERAGE "Instrument the test targets for gcov coverage (CI/SonarCloud only)" OFF)
 
 # --- JUCE -------------------------------------------------------------------
 include(FetchContent)
@@ -134,6 +135,16 @@ if(ZEQ_BUILD_TESTS)
         juce::juce_gui_extra
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
+
+    # Coverage instrumentation, opt-in via -DZEQ_COVERAGE=ON. Applied only to the test
+    # executables (none of which link juce_recommended_lto_flags), so there is no LTO/gcov
+    # conflict and the shipped plugin build is unaffected.
+    if(ZEQ_COVERAGE)
+        foreach(t ZandersEQTests ZandersEQRoutingTests ZandersEQDynamicsTests ZandersEQEngineTests)
+            target_compile_options(${t} PRIVATE --coverage -O0 -g)
+            target_link_options(${t}    PRIVATE --coverage)
+        endforeach()
+    endif()
 
     enable_testing()
     add_test(NAME MatchFitTests COMMAND ZandersEQTests)

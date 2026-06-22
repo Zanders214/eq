@@ -2,6 +2,7 @@ name: SonarCloud
 
 on:
   push:
+    branches: [dev]   # mainline branch analysis; PR branches are covered by pull_request below
   pull_request:
   workflow_dispatch:
 
@@ -52,7 +53,10 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Generate coverage report
-        run: gcovr --sonarqube coverage.xml --root . --filter 'src/'
+        # JUCE's amalgamated modules are compiled into the test exes, so they get instrumented
+        # too. gcov can't resolve HarfBuzz's generated .rl/.hh sources and errors out; without
+        # ignoring those, gcovr exits non-zero. --filter keeps only our src/ in the report.
+        run: gcovr --root . --filter 'src/' --gcov-ignore-errors=all --sonarqube coverage.xml
 
       - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v7

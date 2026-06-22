@@ -1,0 +1,68 @@
+name: SonarCloud
+
+on:
+  push:
+    branches: [dev]   # mainline branch analysis; PR branches are covered by pull_request below
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  sonarcloud:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history → accurate new-code / blame
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build gcovr \
+            libasound2-dev libjack-jackd2-dev \
+            libxinerama-dev libxrandr-dev libxcursor-dev libxcomposite-dev libxext-dev \
+            libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev
+
+      # Reuse the JUCE source tree fetched by the CI job (same key; the source is config-independent).
+      - name: Cache JUCE source
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-src-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      # No ccache here on purpose: keeps compile_commands.json clean (no launcher) and
+      # avoids gcov/ccache caching pitfalls for the instrumented build.
+      - name: Configure (Debug + coverage + compile DB)
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DZEQ_BUILD_TESTS=ON
+          -DZEQ_COVERAGE=ON
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      # Build only the test exes: instruments the src files compiled into them and generates the
+      # JUCE/BinaryData headers the analyzer needs, while skipping the slow LTO plugin link.
+      # The plugin's src/*.cpp are still analyzed via their entries in compile_commands.json.
+      - name: Build tests
+        run: >
+          cmake --build build --parallel --target
+          ZandersEQTests ZandersEQRoutingTests ZandersEQDynamicsTests ZandersEQEngineTests
+
+      - name: Run tests (generates .gcda)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Generate coverage report
+        # JUCE's amalgamated modules are compiled into the test exes, so they get instrumented
+        # too. gcov can't resolve HarfBuzz's generated .rl/.hh sources and errors out; without
+        # ignoring those, gcovr exits non-zero. --filter keeps only our src/ in the report.
+        run: gcovr --root . --filter 'src/' --gcov-ignore-errors=all --sonarqube coverage.xml
+
+      - name: SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # enables PR decoration
+        with:
+          args: >
+            --define sonar.qualitygate.wait=true

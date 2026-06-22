@@ -69,5 +69,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ZandersEQ-VST3
-          path: build/ZandersEQ_artefacts/Release/VST3/ZandersEQ.vst3
-          if-no-files-found: ignore
+          # Point at the parent dir, not the .vst3 bundle itself: upload-artifact@v4
+          # uses the lowest common ancestor as the zip root, so naming the bundle
+          # directly would strip the "ZandersEQ.vst3" wrapper and zip only its Contents/.
+          path: build/ZandersEQ_artefacts/Release/VST3/
+          if-no-files-found: error

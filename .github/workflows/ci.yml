@@ -55,12 +55,15 @@ jobs:
             ccache-${{ runner.os }}-
 
       # Linux: Ninja + ccache for fast incremental CI.
+      # Standalone is off everywhere here: we only ship/validate the VST3, so building it (and,
+      # on macOS, AU) just burns CI time.
       - name: Configure (Linux)
         if: runner.os == 'Linux'
         run: >
           cmake -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DZEQ_BUILD_TESTS=ON
+          -DZEQ_BUILD_STANDALONE=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -72,9 +75,13 @@ jobs:
           cmake -B build
           -DCMAKE_BUILD_TYPE=Release
           -DZEQ_BUILD_TESTS=ON
+          -DZEQ_BUILD_STANDALONE=OFF
 
+      # Explicit job count: `--parallel` with no number leaves the Unix Makefiles generator
+      # (macOS default) running serially, which made the macOS leg take ~20 min. nproc covers
+      # Linux and the Windows Git Bash; sysctl is the macOS fallback.
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel "$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure

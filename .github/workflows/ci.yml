@@ -108,8 +108,13 @@ jobs:
           # Per-OS name: upload-artifact@v4 requires unique artifact names within a run, and it
           # tells you at a glance which platform's plugin you're downloading.
           name: ZandersEQ-VST3-${{ matrix.name }}
-          # Point at the parent dir, not the .vst3 bundle itself: upload-artifact@v4 uses the
-          # lowest common ancestor as the zip root, so naming the bundle directly would strip the
-          # "ZandersEQ.vst3" wrapper and zip only its Contents/.
-          path: build/ZandersEQ_artefacts/Release/VST3/
+          # Point at the parent dir, not the .vst3 bundle itself: with a directory path,
+          # upload-artifact@v4 makes that directory the zip root, so the "ZandersEQ.vst3" wrapper
+          # is preserved. Exclude the MSVC link byproducts (.exp/.lib/.pdb) the Windows build drops
+          # next to the bundle — they don't exist on Linux/macOS, so the excludes are no-ops there.
+          path: |
+            build/ZandersEQ_artefacts/Release/VST3/
+            !build/ZandersEQ_artefacts/Release/VST3/*.exp
+            !build/ZandersEQ_artefacts/Release/VST3/*.lib
+            !build/ZandersEQ_artefacts/Release/VST3/*.pdb
           if-no-files-found: error

@@ -7,13 +7,27 @@ on:
 
 jobs:
   build-test-validate:
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false        # one OS failing shouldn't hide the others
+      matrix:
+        include:
+          - { os: ubuntu-24.04,   name: Linux }
+          - { os: windows-latest, name: Windows }
+          - { os: macos-14,       name: macOS }
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
+    defaults:
+      run:
+        shell: bash           # Git Bash on the Windows runner → one script style across all three
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # JUCE needs ALSA/JACK/X11/etc. headers on Linux; Windows and macOS build against the
+      # system SDKs/frameworks and need nothing extra.
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -24,7 +38,7 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev \
             libcurl4-openssl-dev
 
-      # Reuse the fetched JUCE source tree across runs (keyed on the pinned tag in CMakeLists).
+      # Reuse the fetched JUCE source tree across runs (keyed per-OS on the pinned tag in CMakeLists).
       - name: Cache JUCE source
         uses: actions/cache@v4
         with:
@@ -32,6 +46,7 @@ jobs:
           key: juce-src-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
 
       - name: Cache ccache
+        if: runner.os == 'Linux'    # ccache is only wired into the Linux configure below
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.ccache
@@ -39,27 +54,49 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-
 
-      - name: Configure
+      # Linux: Ninja + ccache for fast incremental CI.
+      # Standalone is off everywhere here: we only ship/validate the VST3, so building it (and,
+      # on macOS, AU) just burns CI time.
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
         run: >
           cmake -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DZEQ_BUILD_TESTS=ON
+          -DZEQ_BUILD_STANDALONE=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # Windows / macOS: use the default generator (VS 2022 / Makefiles) so we don't need to
+      # set up an MSVC dev shell for Ninja. Release is selected at build time via --config.
+      - name: Configure (Windows / macOS)
+        if: runner.os != 'Linux'
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DZEQ_BUILD_TESTS=ON
+          -DZEQ_BUILD_STANDALONE=OFF
+
+      # Explicit job count: `--parallel` with no number leaves the Unix Makefiles generator
+      # (macOS default) running serially, which made the macOS leg take ~20 min. nproc covers
+      # Linux and the Windows Git Bash; sysctl is the macOS fallback.
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --config Release --parallel "$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
 
       - name: Unit tests
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Download pluginval
+      # pluginval host-validation runs on Linux (xvfb for the headless GUI). The Windows/macOS
+      # artifacts are still built and unit-tested; per-OS pluginval can be added later if wanted.
+      - name: Download pluginval (Linux)
+        if: runner.os == 'Linux'
         run: |
           curl -sSL https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip -o pluginval.zip
           unzip -o pluginval.zip
           chmod +x pluginval
 
-      - name: Validate (pluginval, strictness 10)
+      - name: Validate (pluginval, strictness 10) (Linux)
+        if: runner.os == 'Linux'
         run: >
           xvfb-run -a ./pluginval --strictness-level 10
           --validate build/ZandersEQ_artefacts/Release/VST3/ZandersEQ.vst3
@@ -68,9 +105,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ZandersEQ-VST3
-          # Point at the parent dir, not the .vst3 bundle itself: upload-artifact@v4
-          # uses the lowest common ancestor as the zip root, so naming the bundle
-          # directly would strip the "ZandersEQ.vst3" wrapper and zip only its Contents/.
-          path: build/ZandersEQ_artefacts/Release/VST3/
+          # Per-OS name: upload-artifact@v4 requires unique artifact names within a run, and it
+          # tells you at a glance which platform's plugin you're downloading.
+          name: ZandersEQ-VST3-${{ matrix.name }}
+          # Point at the parent dir, not the .vst3 bundle itself: with a directory path,
+          # upload-artifact@v4 makes that directory the zip root, so the "ZandersEQ.vst3" wrapper
+          # is preserved. Exclude the MSVC link byproducts (.exp/.lib/.pdb) the Windows build drops
+          # next to the bundle — they don't exist on Linux/macOS, so the excludes are no-ops there.
+          path: |
+            build/ZandersEQ_artefacts/Release/VST3/
+            !build/ZandersEQ_artefacts/Release/VST3/*.exp
+            !build/ZandersEQ_artefacts/Release/VST3/*.lib
+            !build/ZandersEQ_artefacts/Release/VST3/*.pdb
           if-no-files-found: error

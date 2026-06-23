@@ -187,7 +187,10 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         juce::dsp::AudioBlock<float> block (mainBus);
         auto up = oversampler->processSamplesUp (block);
         std::array<float*, 2> chans { nullptr, nullptr };
-        const int n = (int) juce::jmin<size_t> (2, up.getNumChannels());
+        // Compare as int (channel count is tiny): an explicit jmin<size_t> would force JUCE's
+        // SIMD jmin overload to instantiate SIMDRegister<size_t>, which is undefined on macOS
+        // arm64 where size_t (unsigned long) != uint64_t (unsigned long long).
+        const int n = juce::jmin (2, (int) up.getNumChannels());
         for (int ch = 0; ch < n; ++ch)
             chans[(size_t) ch] = up.getChannelPointer ((size_t) ch);
         processEq (chans.data(), n, (int) up.getNumSamples(), procRate);

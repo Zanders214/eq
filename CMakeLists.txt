@@ -41,7 +41,7 @@ juce_add_plugin(ZandersEQ
     PRODUCT_NAME            "ZandersEQ"
     COMPANY_NAME            "ZandersAudio"
     BUNDLE_ID               "com.zandersaudio.zanderseq"
-    PLUGIN_MANUFACTURER_CODE Neon
+    PLUGIN_MANUFACTURER_CODE Zand
     PLUGIN_CODE             Zeq1
     FORMATS                 ${ZEQ_FORMATS}
     IS_SYNTH                FALSE

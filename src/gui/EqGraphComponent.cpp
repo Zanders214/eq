@@ -59,8 +59,8 @@ EqGraphComponent::BandView EqGraphComponent::readBand (int i) const
 
 juce::Point<float> EqGraphComponent::nodePosition (const BandView& b) const
 {
-    const float w = (float) getWidth();
-    const float h = (float) getHeight();
+    const auto w = (float) getWidth();
+    const auto h = (float) getHeight();
     const float x = freqToX (b.freq, w);
     const float y = sitsOnZeroLine (b.type) ? gainToY (0.0f, h) : gainToY (b.gain, h);
     return { x, y };
@@ -125,8 +125,8 @@ int EqGraphComponent::nodeAtPosition (juce::Point<float> p) const
 // A dynamic-range handle, only when it has separated enough from its node.
 int EqGraphComponent::rangeHandleAt (juce::Point<float> p) const
 {
-    const float w = (float) getWidth();
-    const float h = (float) getHeight();
+    const auto w = (float) getWidth();
+    const auto h = (float) getHeight();
     for (int i = 0; i < numBands; ++i)
     {
         const auto b = readBand (i);
@@ -160,8 +160,8 @@ void EqGraphComponent::paint (juce::Graphics& g)
 
 void EqGraphComponent::drawGrid (juce::Graphics& g) const
 {
-    const float w = (float) getWidth();
-    const float h = (float) getHeight();
+    const auto w = (float) getWidth();
+    const auto h = (float) getHeight();
     struct FL { float f; const char* lab; };
     static const std::array<FL, 22> fl = { {
         {30,nullptr},{40,nullptr},{50,nullptr},{60,nullptr},{80,nullptr},{100,"100"},
@@ -194,8 +194,8 @@ void EqGraphComponent::drawGrid (juce::Graphics& g) const
 
 void EqGraphComponent::drawSpectrum (juce::Graphics& g)
 {
-    const float w = (float) getWidth();
-    const float h = (float) getHeight();
+    const auto w = (float) getWidth();
+    const auto h = (float) getHeight();
 
     juce::Path fill;
     fill.startNewSubPath (0.0f, h);
@@ -235,8 +235,8 @@ void EqGraphComponent::drawSpectrum (juce::Graphics& g)
 
 void EqGraphComponent::drawCurve (juce::Graphics& g) const
 {
-    const float w = (float) getWidth();
-    const float h = (float) getHeight();
+    const auto w = (float) getWidth();
+    const auto h = (float) getHeight();
     const double sr = proc.getActiveSampleRate();
 
     std::array<BandView, numBands> bv;
@@ -443,8 +443,8 @@ void EqGraphComponent::mouseDown (const juce::MouseEvent& e)
 
 void EqGraphComponent::mouseDrag (const juce::MouseEvent& e)
 {
-    const float w = (float) getWidth();
-    const float h = (float) getHeight();
+    const auto w = (float) getWidth();
+    const auto h = (float) getHeight();
 
     if (draggingRange && dragBand >= 0)
     {

@@ -21,7 +21,7 @@ public:
 private:
     juce::Rectangle<float> cellBounds (int i) const;
     juce::Rectangle<float> pillBounds (juce::Rectangle<float> cell) const;
-    void paintCell (juce::Graphics& g, int i, int sel, bool anySolo);
+    void paintCell (juce::Graphics& g, int i, int sel, bool anySolo) const;
 
     ZandersEqAudioProcessor& proc;
     juce::AudioProcessorValueTreeState& apvts;

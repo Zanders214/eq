@@ -31,7 +31,7 @@ void BandStrip::paint (juce::Graphics& g)
         paintCell (g, i, sel, anySolo);
 }
 
-void BandStrip::paintCell (juce::Graphics& g, int i, int sel, bool anySolo)
+void BandStrip::paintCell (juce::Graphics& g, int i, int sel, bool anySolo) const
 {
     {
         auto cell = cellBounds (i);

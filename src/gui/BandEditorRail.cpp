@@ -148,7 +148,7 @@ void BandEditorRail::bindToSelected()
     releaseAtt = std::make_unique<Attachment> (apvts, ids::dynRelease (s), releaseSlider);
 
     lastSelected = s;
-    resized();
+    BandEditorRail::resized();
     refresh();
 }
 

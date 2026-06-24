@@ -62,9 +62,9 @@ public:
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {} // single fixed program: nothing to switch
+    void setCurrentProgram (int) override { /* single fixed program: nothing to switch */ }
     const juce::String getProgramName (int) override { return {}; } // NOSONAR(cpp:S5951) const return is mandated by the juce::AudioProcessor::getProgramName override signature
-    void changeProgramName (int, const juce::String&) override {} // programs are not user-renamable
+    void changeProgramName (int, const juce::String&) override { /* programs are not user-renamable */ }
 
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int sizeInBytes) override;

@@ -52,7 +52,7 @@ void EqContent::timerCallback()
     graph.repaint();
 
     // The static panels only change when a parameter does — repaint them lazily.
-    if (uiDirty.exchange (false, std::memory_order_relaxed))
+    if (uiDirty.exchange (false))
     {
         strip.repaint();
         presetBar.repaint();

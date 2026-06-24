@@ -233,6 +233,55 @@ void EqGraphComponent::drawSpectrum (juce::Graphics& g)
     }
 }
 
+bool EqGraphComponent::curveCacheStale (const std::array<BandView, numBands>& bv,
+                                        float w, float h, double sr) const
+{
+    if (! haveCurveKey || (int) w != cachedCurveW || (int) h != cachedCurveH || sr != cachedCurveSr)
+        return true;
+
+    for (int i = 0; i < numBands; ++i)
+    {
+        const auto& b = bv[(size_t) i];
+        const auto& k = lastCurveKey[(size_t) i];
+        if (b.type != k.type || b.freq != k.freq || b.gain != k.gain
+            || b.q != k.q || b.slope != k.slope || b.live != k.live)
+            return true;
+    }
+
+    // A band in dynamic mode moves the curve every frame.
+    for (const auto& b : bv)
+        if (b.dynOn)
+            return true;
+
+    return false;
+}
+
+void EqGraphComponent::rebuildCurve (const std::array<BandView, numBands>& bv,
+                                     float w, float h, double sr) const
+{
+    const int step = 2;
+    cachedCurve.clear();
+    for (int x = 0; x <= (int) w; x += step)
+    {
+        const float f = xToFreq ((float) x, w);
+        double db = 0.0;
+        for (const auto& b : bv)
+            db += bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
+        const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
+        if (x == 0) cachedCurve.startNewSubPath ((float) x, y); else cachedCurve.lineTo ((float) x, y);
+    }
+
+    for (int i = 0; i < numBands; ++i)
+    {
+        const auto& b = bv[(size_t) i];
+        lastCurveKey[(size_t) i] = { b.type, b.freq, b.gain, b.q, b.slope, b.live };
+    }
+    cachedCurveW = (int) w;
+    cachedCurveH = (int) h;
+    cachedCurveSr = sr;
+    haveCurveKey = true;
+}
+
 void EqGraphComponent::drawCurve (juce::Graphics& g) const
 {
     const auto w = (float) getWidth();
@@ -244,41 +293,8 @@ void EqGraphComponent::drawCurve (juce::Graphics& g) const
 
     const int step = 2;
 
-    // Rebuild the summed curve only when something that affects it changed: the
-    // size, any band's static params, or — because dynamic EQ moves the curve in
-    // real time — any band currently in dynamic mode.
-    bool anyDyn = false;
-    for (auto& b : bv) anyDyn = anyDyn || b.dynOn;
-
-    bool keyChanged = ! haveCurveKey || (int) w != cachedCurveW || (int) h != cachedCurveH
-                   || sr != cachedCurveSr;
-    for (int i = 0; i < numBands && ! keyChanged; ++i)
-    {
-        const auto& b = bv[(size_t) i]; const auto& k = lastCurveKey[(size_t) i];
-        keyChanged = b.type != k.type || b.freq != k.freq || b.gain != k.gain
-                  || b.q != k.q || b.slope != k.slope || b.live != k.live;
-    }
-
-    if (keyChanged || anyDyn)
-    {
-        cachedCurve.clear();
-        for (int x = 0; x <= (int) w; x += step)
-        {
-            const float f = xToFreq ((float) x, w);
-            double db = 0.0;
-            for (auto& b : bv)
-                db += bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
-            const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
-            if (x == 0) cachedCurve.startNewSubPath ((float) x, y); else cachedCurve.lineTo ((float) x, y);
-        }
-
-        for (int i = 0; i < numBands; ++i)
-        {
-            const auto& b = bv[(size_t) i];
-            lastCurveKey[(size_t) i] = { b.type, b.freq, b.gain, b.q, b.slope, b.live };
-        }
-        cachedCurveW = (int) w; cachedCurveH = (int) h; cachedCurveSr = sr; haveCurveKey = true;
-    }
+    if (curveCacheStale (bv, w, h, sr))
+        rebuildCurve (bv, w, h, sr);
 
     const juce::Path& curve = cachedCurve;
 

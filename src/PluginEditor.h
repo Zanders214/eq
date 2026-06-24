@@ -36,8 +36,8 @@ private:
     // Any parameter change (UI edit, host automation, preset/undo) flags the
     // static panels (strip/rail/preset bar/header) for a repaint on the next
     // timer tick — so they are no longer repainted blindly every frame.
-    void parameterValueChanged (int, float) override { uiDirty.store (true, std::memory_order_relaxed); }
-    void parameterGestureChanged (int, bool) override {}
+    void parameterValueChanged (int, float) override { uiDirty.store (true); }
+    void parameterGestureChanged (int, bool) override { /* gesture begin/end doesn't change what the panels display */ }
     std::atomic<bool> uiDirty { true };
 
     ZandersEqAudioProcessor& proc;

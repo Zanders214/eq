@@ -488,7 +488,7 @@ void ZandersEqAudioProcessor::redo()
 juce::File ZandersEqAudioProcessor::userPresetsDir() const
 {
     auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                   .getChildFile ("Neon Plugins").getChildFile ("ZandersEQ").getChildFile ("Presets");
+                   .getChildFile ("ZandersAudio").getChildFile ("ZandersEQ").getChildFile ("Presets");
     dir.createDirectory();
     return dir;
 }

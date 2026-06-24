@@ -1,4 +1,5 @@
 #include "PresetBar.h"
+#include <memory>
 #include "NeonLookAndFeel.h"
 #include "Theme.h"
 #include "../Presets.h"
@@ -12,7 +13,7 @@ PresetBar::PresetBar (ZandersEqAudioProcessor& p) : proc (p), apvts (p.getApvts(
 // The six built-in chips fill the row left of the SAVE / LOAD buttons.
 juce::Rectangle<float> PresetBar::chipBounds (int i) const
 {
-    const int n = (int) presets().size();
+    const auto n = (int) presets().size();
     const float gap = 6.0f;
     const float total = (float) getWidth() - 120.0f;     // reserve the right edge for the buttons
     const float w = (total - gap * (float) (n - 1)) / (float) n;
@@ -73,7 +74,7 @@ void PresetBar::mouseDown (const juce::MouseEvent& e)
     {
         if (chipBounds (i).contains (e.position))
         {
-            proc.recordUndoableEdit ([&] { applyPreset (apvts, list[(size_t) i]); });
+            proc.recordUndoableEdit ([this, &list, i] { applyPreset (apvts, list[(size_t) i]); });
             if (onPresetApplied) onPresetApplied();
             repaint();
             return;
@@ -83,16 +84,17 @@ void PresetBar::mouseDown (const juce::MouseEvent& e)
 
 void PresetBar::showSaveDialog()
 {
-    auto* aw = new juce::AlertWindow ("Save preset", "Name this preset:",
-                                      juce::MessageBoxIconType::NoIcon, this);
+    auto owned = std::make_unique<juce::AlertWindow> ("Save preset", "Name this preset:",
+                                                      juce::MessageBoxIconType::NoIcon, this);
+    auto* aw = owned.release();   // ownership passes to JUCE via enterModalState (deleteWhenDismissed = true)
     aw->setLookAndFeel (&getLookAndFeel());
     aw->addTextEditor ("name", "My Preset");
     aw->addButton ("Save",   1, juce::KeyPress (juce::KeyPress::returnKey));
     aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
     aw->enterModalState (true, juce::ModalCallbackFunction::create ([this, aw] (int result)
     {
-        if (result == 1 && proc.saveUserPreset (aw->getTextEditorContents ("name")))
-            if (onPresetApplied) onPresetApplied();
+        if (result == 1 && proc.saveUserPreset (aw->getTextEditorContents ("name")) && onPresetApplied)
+            onPresetApplied();
         aw->setLookAndFeel (nullptr);
     }), true);   // delete the window when dismissed
 }

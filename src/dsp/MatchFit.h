@@ -30,7 +30,9 @@ inline double matchBinFreq (int k, int K) noexcept
 struct MatchBand
 {
     FilterType type  = FilterType::bell;
-    float      freq  = 1000.0f, gain = 0.0f, q = 1.0f;
+    float      freq  = 1000.0f;
+    float      gain  = 0.0f;
+    float      q     = 1.0f;
     int        slope = 12;
     bool       on    = false;
 };
@@ -51,7 +53,8 @@ namespace matchdetail
         std::array<double, kMatchBins> out {};
         for (int k = 0; k < K; ++k)
         {
-            double sum = 0.0, wsum = 0.0;
+            double sum = 0.0;
+            double wsum = 0.0;
             for (int j = std::max (0, k - halfBins); j <= std::min (K - 1, k + halfBins); ++j)
             {
                 const double tri = 1.0 - (double) std::abs (j - k) / (double) (halfBins + 1);
@@ -69,8 +72,10 @@ namespace matchdetail
                                  std::array<double, kMatchBins>& t,
                                  std::array<double, kMatchBins>& w)
     {
-        std::array<double, kMatchBins> rDb {}, sDb {};
-        double rPeak = -300.0, sPeak = -300.0;
+        std::array<double, kMatchBins> rDb {};
+        std::array<double, kMatchBins> sDb {};
+        double rPeak = -300.0;
+        double sPeak = -300.0;
         for (int k = 0; k < K; ++k)
         {
             rDb[(size_t) k] = 10.0 * std::log10 ((double) std::max (1.0e-20f, refPower[k]));
@@ -86,7 +91,8 @@ namespace matchdetail
             return std::clamp ((db - (peak - 80.0)) / 40.0, 0.0, 1.0);
         };
 
-        double wsum = 0.0, wt = 0.0;
+        double wsum = 0.0;
+        double wt = 0.0;
         for (int k = 0; k < K; ++k)
         {
             t[(size_t) k] = rDb[(size_t) k] - sDb[(size_t) k];
@@ -132,11 +138,13 @@ namespace matchdetail
         const double halfMag = std::abs (A) * 0.5;
         const bool pos = A > 0.0;
 
-        int l = peak, r = peak;
+        int l = peak;
+        int r = peak;
         while (l > 0     && (res[(size_t) l] > 0.0) == pos && std::abs (res[(size_t) l]) > halfMag) --l;
         while (r < K - 1 && (res[(size_t) r] > 0.0) == pos && std::abs (res[(size_t) r]) > halfMag) ++r;
 
-        const double fL = matchBinFreq (l, K), fR = matchBinFreq (r, K);
+        const double fL = matchBinFreq (l, K);
+        const double fR = matchBinFreq (r, K);
         if (fR <= fL) return 2.0f;
         const double bwOct = std::log2 (fR / fL);
         if (bwOct < 1.0e-3) return 6.0f;
@@ -145,13 +153,18 @@ namespace matchdetail
     }
 
     // Solve A x = b (n<=6) via Gaussian elimination with partial pivoting.
-    inline bool solveLinear (double A[6][6], double b[6], double x[6], int n)
+    inline bool solveLinear (std::array<std::array<double, 6>, 6>& A,
+                             std::array<double, 6>& b,
+                             std::array<double, 6>& x, int n)
     {
         for (int i = 0; i < n; ++i)
         {
-            int piv = i; double best = std::abs (A[i][i]);
+            int piv = i;
+            double best = std::abs (A[i][i]);
             for (int r = i + 1; r < n; ++r)
+            {
                 if (std::abs (A[r][i]) > best) { best = std::abs (A[r][i]); piv = r; }
+            }
             if (best < 1.0e-9) return false;
             if (piv != i) { for (int c = 0; c < n; ++c) std::swap (A[i][c], A[piv][c]); std::swap (b[i], b[piv]); }
             for (int r = i + 1; r < n; ++r)
@@ -169,12 +182,67 @@ namespace matchdetail
         }
         return true;
     }
+
+    // Weighted dot product sum_k w[k] * a[k] * b[k] over [0, K).
+    inline double dotWeighted (const std::array<double, kMatchBins>& a,
+                               const std::array<double, kMatchBins>& b,
+                               const std::array<double, kMatchBins>& w, int K)
+    {
+        double s = 0.0;
+        for (int k = 0; k < K; ++k)
+            s += w[(size_t) k] * a[(size_t) k] * b[(size_t) k];
+        return s;
+    }
+
+    // Index of the highest weighted-residual bin in [0, K), or -1 if none exceeds 0.
+    inline int findPeakBin (const std::array<double, kMatchBins>& residual,
+                            const std::array<double, kMatchBins>& w, int K)
+    {
+        int peak = -1;
+        double best = 0.0;
+        for (int k = 0; k < K; ++k)
+        {
+            const double m = w[(size_t) k] * std::abs (residual[(size_t) k]);
+            if (m > best) { best = m; peak = k; }
+        }
+        return peak;
+    }
+
+    // Weighted least-squares gain refinement (type/freq/Q fixed → linear in gain).
+    // Recomputes each used band's gain in place from the conditioned target t.
+    inline void refineGains (MatchResult& result,
+                             const std::array<double, kMatchBins>& t,
+                             const std::array<double, kMatchBins>& w, int K, double sr)
+    {
+        const int n = result.used;
+        std::array<std::array<double, kMatchBins>, numBands> phi {};
+        for (int i = 0; i < n; ++i)
+        {
+            const auto& b = result.bands[(size_t) i];
+            for (int k = 0; k < K; ++k)
+                phi[(size_t) i][(size_t) k] = bandMagnitudeDb (b.type, b.freq, 1.0, b.q, b.slope, true,
+                                                               matchBinFreq (k, K), sr);
+        }
+        std::array<std::array<double, 6>, 6> A {};
+        std::array<double, 6> bb {};
+        std::array<double, 6> x {};
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < n; ++j)
+                A[i][j] = dotWeighted (phi[(size_t) i], phi[(size_t) j], w, K);
+            bb[i] = dotWeighted (phi[(size_t) i], t, w, K);
+        }
+        if (solveLinear (A, bb, x, n))
+            for (int i = 0; i < n; ++i)
+                result.bands[(size_t) i].gain = (float) std::clamp (x[i], -18.0, 18.0);
+    }
 } // namespace matchdetail
 
 // The conditioned target curve in dB (de-meaned, smoothed) — for the ghost overlay.
 inline void computeTargetDb (const float* refPower, const float* srcPower, int K, float* outDb)
 {
-    std::array<double, kMatchBins> t {}, w {};
+    std::array<double, kMatchBins> t {};
+    std::array<double, kMatchBins> w {};
     matchdetail::conditionTarget (refPower, srcPower, std::min (K, kMatchBins), t, w);
     for (int k = 0; k < std::min (K, kMatchBins); ++k)
         outDb[k] = (float) t[(size_t) k];
@@ -187,7 +255,9 @@ inline MatchResult fitMatch (const float* refPower, const float* srcPower, int K
     MatchResult result;
     K = std::min (K, kMatchBins);
 
-    std::array<double, kMatchBins> t {}, w {}, residual {};
+    std::array<double, kMatchBins> t {};
+    std::array<double, kMatchBins> w {};
+    std::array<double, kMatchBins> residual {};
     conditionTarget (refPower, srcPower, K, t, w);
     residual = t;
 
@@ -195,12 +265,7 @@ inline MatchResult fitMatch (const float* refPower, const float* srcPower, int K
     const double gateDb = 0.75;
     for (int n = 0; n < numBands; ++n)
     {
-        int peak = -1; double best = 0.0;
-        for (int k = 0; k < K; ++k)
-        {
-            const double m = w[(size_t) k] * std::abs (residual[(size_t) k]);
-            if (m > best) { best = m; peak = k; }
-        }
+        const int peak = findPeakBin (residual, w, K);
         if (peak < 0 || std::abs (residual[(size_t) peak]) < gateDb)
             break;
 
@@ -221,33 +286,7 @@ inline MatchResult fitMatch (const float* refPower, const float* srcPower, int K
 
     // Weighted least-squares gain refinement (type/freq/Q fixed → linear in gain).
     if (result.used >= 1)
-    {
-        const int n = result.used;
-        std::array<std::array<double, kMatchBins>, numBands> phi {};
-        for (int i = 0; i < n; ++i)
-        {
-            const auto& b = result.bands[(size_t) i];
-            for (int k = 0; k < K; ++k)
-                phi[(size_t) i][(size_t) k] = bandMagnitudeDb (b.type, b.freq, 1.0, b.q, b.slope, true,
-                                                               matchBinFreq (k, K), sr);
-        }
-        double A[6][6] = {}, bb[6] = {}, x[6] = {};
-        for (int i = 0; i < n; ++i)
-        {
-            for (int j = 0; j < n; ++j)
-            {
-                double s = 0.0;
-                for (int k = 0; k < K; ++k) s += w[(size_t) k] * phi[(size_t) i][(size_t) k] * phi[(size_t) j][(size_t) k];
-                A[i][j] = s;
-            }
-            double s = 0.0;
-            for (int k = 0; k < K; ++k) s += w[(size_t) k] * phi[(size_t) i][(size_t) k] * t[(size_t) k];
-            bb[i] = s;
-        }
-        if (solveLinear (A, bb, x, n))
-            for (int i = 0; i < n; ++i)
-                result.bands[(size_t) i].gain = (float) std::clamp (x[i], -18.0, 18.0);
-    }
+        refineGains (result, t, w, K, sr);
 
     // Apply match amount.
     const float amt = std::clamp (amount, 0.0f, 1.0f);

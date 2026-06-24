@@ -48,7 +48,12 @@ private:
     PresetBar        presetBar;
     BandEditorRail   rail;
 
-    juce::Rectangle<int> headerBounds, wellBounds, abA, abB, undoBtn, redoBtn;
+    juce::Rectangle<int> headerBounds;
+    juce::Rectangle<int> wellBounds;
+    juce::Rectangle<int> abA;
+    juce::Rectangle<int> abB;
+    juce::Rectangle<int> undoBtn;
+    juce::Rectangle<int> redoBtn;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EqContent)
 };

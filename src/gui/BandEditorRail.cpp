@@ -2,13 +2,15 @@
 #include "NeonLookAndFeel.h"
 #include "Theme.h"
 
+#include <array>
+
 namespace zeq
 {
 using namespace theme;
 
 namespace
 {
-    const char* typeChipLabels[numFilterTypes] = { "HP", "LO", "BELL", "NTCH", "HI", "LP" };
+    constexpr std::array<const char*, numFilterTypes> typeChipLabels { "HP", "LO", "BELL", "NTCH", "HI", "LP" };
 
     void drawChip (juce::Graphics& g, juce::Rectangle<float> r, bool active,
                    const juce::String& text, float fontH, float tracking)
@@ -44,8 +46,8 @@ namespace
         }
 
         // square status dot
-        auto dotCol = active ? juce::Colours::white
-                             : (isDanger ? theme::danger.withAlpha (0.8f) : accent.withAlpha (0.8f));
+        auto inactiveDotCol = isDanger ? theme::danger.withAlpha (0.8f) : accent.withAlpha (0.8f);
+        auto dotCol = active ? juce::Colours::white : inactiveDotCol;
         auto content = r.reduced (14.0f, 0.0f);
         auto dot = juce::Rectangle<float> (content.getX(), r.getCentreY() - 4.0f, 8.0f, 8.0f);
         NeonLookAndFeel::glow (g, dot, dotCol, 4.0f, 0.6f);
@@ -56,6 +58,18 @@ namespace
         g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
         g.drawText (text, r.withTrimmedLeft (28.0f).withTrimmedRight (6.0f),
                     juce::Justification::centredLeft);
+    }
+
+    void drawSliderHead (juce::Graphics& g, juce::Rectangle<int> block, const juce::String& label,
+                         const juce::String& value, bool dim)
+    {
+        auto head = block.withHeight (16);
+        g.setColour (textLabel);
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+        g.drawText (label, head, juce::Justification::centredLeft);
+        g.setColour (dim ? text3.withAlpha (0.5f) : text2);
+        g.setFont (Fonts::mono (12.0f, true));
+        g.drawText (value, head, juce::Justification::centredRight);
     }
 }
 
@@ -92,7 +106,7 @@ BandEditorRail::BandEditorRail (ZandersEqAudioProcessor& p)
     setupSlider (attackSlider,  "warm");
     setupSlider (releaseSlider, "warm");
 
-    bindToSelected();
+    BandEditorRail::bindToSelected();
 }
 
 BandEditorRail::~BandEditorRail() = default;
@@ -104,7 +118,7 @@ FilterType BandEditorRail::selectedType() const
 
 void BandEditorRail::setChoice (const juce::String& id, int idx)
 {
-    proc.recordUndoableEdit ([&]
+    proc.recordUndoableEdit ([this, &id, idx]
     {
         if (auto* p = apvts.getParameter (id))
             p->setValueNotifyingHost (p->convertTo0to1 ((float) idx));
@@ -112,7 +126,7 @@ void BandEditorRail::setChoice (const juce::String& id, int idx)
 }
 void BandEditorRail::setBool (const juce::String& id, bool v)
 {
-    proc.recordUndoableEdit ([&]
+    proc.recordUndoableEdit ([this, &id, v]
     {
         if (auto* p = apvts.getParameter (id))
             p->setValueNotifyingHost (v ? 1.0f : 0.0f);
@@ -134,7 +148,7 @@ void BandEditorRail::bindToSelected()
     releaseAtt = std::make_unique<Attachment> (apvts, ids::dynRelease (s), releaseSlider);
 
     lastSelected = s;
-    resized();
+    BandEditorRail::resized();
     refresh();
 }
 
@@ -224,7 +238,7 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
 
 juce::Rectangle<float> BandEditorRail::segment (juce::Rectangle<int> row, int i, int n, float gap) const
 {
-    const float w = ((float) row.getWidth() - gap * (n - 1)) / (float) n;
+    const float w = ((float) row.getWidth() - gap * static_cast<float> (n - 1)) / (float) n;
     return { (float) row.getX() + (w + gap) * (float) i, (float) row.getY(), w, (float) row.getHeight() };
 }
 
@@ -266,16 +280,10 @@ void BandEditorRail::paint (juce::Graphics& g)
     const int s = selected();
     const auto type = selectedType();
     const float freq = apvts.getRawParameterValue (ids::freq (s))->load();
-    const float gain = apvts.getRawParameterValue (ids::gain (s))->load();
-    const float q    = apvts.getRawParameterValue (ids::q (s))->load();
-    const int slope  = slopeIndexToValue ((int) apvts.getRawParameterValue (ids::slope (s))->load());
     const bool on    = apvts.getRawParameterValue (ids::on (s))->load() > 0.5f;
     const bool solo  = apvts.getRawParameterValue (ids::solo (s))->load() > 0.5f;
     const bool ms    = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
-    const bool hq    = apvts.getRawParameterValue (ids::hq)->load() > 0.5f;
-    const float out  = apvts.getRawParameterValue (ids::output)->load();
     const auto col   = colourForFreq (freq);
-    const bool cut   = isCut (type);
 
     // header
     auto header = L.header;
@@ -296,61 +304,8 @@ void BandEditorRail::paint (juce::Graphics& g)
         drawChip (g, segment (L.typeChips, i, numFilterTypes, 5.0f), (int) type == i,
                   typeChipLabels[i], 9.0f, 0.05f);
 
-    // slider labels + values
-    auto drawSliderHead = [&] (juce::Rectangle<int> block, const juce::String& label,
-                               const juce::String& value, bool dim)
-    {
-        auto head = block.withHeight (16);
-        g.setColour (textLabel);
-        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
-        g.drawText (label, head, juce::Justification::centredLeft);
-        g.setColour (dim ? text3.withAlpha (0.5f) : text2);
-        g.setFont (Fonts::mono (12.0f, true));
-        g.drawText (value, head, juce::Justification::centredRight);
-    };
-    if (! showDyn)
-    {
-        drawSliderHead (L.freqBlock, "FREQUENCY", fmtFreq (freq) + "  " + noteName (freq), false);
-        drawSliderHead (L.gainBlock, "GAIN", cut ? juce::String ("—") : fmtGain (gain), cut);
-        drawSliderHead (L.qBlock, "Q / SLOPE",
-                        cut ? juce::String (slope) + " dB/oct  Q" + juce::String (q, 2)
-                            : "Q " + juce::String (q, 2), false);
-
-        // slope picker (cut filters only)
-        if (cut)
-        {
-            const int slopes[3] = { 12, 24, 48 };
-            for (int i = 0; i < 3; ++i)
-                drawChip (g, segment (L.slopeRow, i, 3, 5.0f), slope == slopes[i],
-                          juce::String (slopes[i]) + " dB/oct", 9.0f, 0.03f);
-        }
-    }
-    else if (cut)
-    {
-        // dynamics not available for cut/notch filters
-        g.setColour (text3.withAlpha (0.6f));
-        g.setFont (Fonts::grotesk (11.0f, Fonts::semibold).withExtraKerningFactor (0.04f));
-        g.drawText ("DYNAMICS AVAILABLE ON BELL / SHELF BANDS",
-                    L.freqBlock.getUnion (L.slopeRow), juce::Justification::centred);
-    }
-    else
-    {
-        const bool dynOn = apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f;
-        const float thr  = apvts.getRawParameterValue (ids::dynThresh (s))->load();
-        const float rng  = apvts.getRawParameterValue (ids::dynRange (s))->load();
-        const float att  = apvts.getRawParameterValue (ids::dynAttack (s))->load();
-        const float rel  = apvts.getRawParameterValue (ids::dynRelease (s))->load();
-        const float live = proc.getDynGainDb (s);
-
-        drawToggle (g, L.dynEnable.toFloat(), dynOn, dynOn ? "DYNAMICS ON" : "DYNAMICS OFF");
-        drawSliderHead (L.dynS0, "THRESHOLD", juce::String (thr, 1) + " dB", ! dynOn);
-        drawSliderHead (L.dynS1, "RANGE",
-                        (rng >= 0 ? "+" : "") + juce::String (rng, 1) + " dB"
-                        + (dynOn && std::abs (live) > 0.05f ? "  (" + juce::String (live, 1) + ")" : ""),
-                        ! dynOn);
-        drawSliderHead (L.dynS2, "ATTACK",  juce::String (att, att < 10 ? 1 : 0) + " ms", ! dynOn);
-        drawSliderHead (L.dynS3, "RELEASE", juce::String (rel, 0) + " ms", ! dynOn);
-    }
+    // slider labels + values (FREQ/GAIN/Q or the DYN section)
+    paintSliderSection (g, L, s);
 
     // enable / solo
     auto onBtn = juce::Rectangle<int> (L.onSolo).removeFromLeft (L.onSolo.getWidth() / 2 - 3).toFloat();
@@ -380,49 +335,116 @@ void BandEditorRail::paint (juce::Graphics& g)
 
     // per-band channel lane (labels follow the global Stereo/MS domain)
     {
-        const int ch = (int) apvts.getRawParameterValue (ids::channel (s))->load();
-        const char* lr[3] = { "L + R", "L", "R" };
-        const char* msl[3] = { "M + S", "M", "S" };
+        const auto ch = (int) apvts.getRawParameterValue (ids::channel (s))->load();
+        const std::array<const char*, 3> lr  { "L + R", "L", "R" };
+        const std::array<const char*, 3> msl { "M + S", "M", "S" };
         for (int i = 0; i < 3; ++i)
             drawChip (g, segment (L.channelRow, i, 3, 5.0f), ch == i,
                       ms ? msl[i] : lr[i], 9.0f, 0.06f);
     }
 
     // EQ-match panel
-    {
-        auto label = L.matchLabel;
-        g.setColour (textLabel);
-        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
-        g.drawText ("EQ MATCH", label, juce::Justification::centredLeft);
-
-        auto srcChip = juce::Rectangle<float> ((float) label.getRight() - 78.0f, (float) label.getY(), 36.0f, 16.0f);
-        auto refChip = juce::Rectangle<float> ((float) label.getRight() - 38.0f, (float) label.getY(), 36.0f, 16.0f);
-        drawChip (g, srcChip, proc.hasSource(),    "SRC", 8.5f, 0.06f);
-        drawChip (g, refChip, proc.hasReference(), "REF", 8.5f, 0.06f);
-
-        g.setColour (textLabel);
-        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
-        g.drawText ("MATCH AMOUNT", L.matchAmtRow.withHeight (14), juce::Justification::centredLeft);
-        g.setColour (text2);
-        g.setFont (Fonts::mono (12.0f, true));
-        g.drawText (juce::String (juce::roundToInt (apvts.getRawParameterValue (ids::matchamount)->load())) + " %",
-                    L.matchAmtRow.withHeight (14), juce::Justification::centredRight);
-
-        const bool capturing = proc.isCapturing();
-        drawToggle (g, L.captureBtn.toFloat(), capturing, capturing ? "CAPTURING" : "CAPTURE");
-
-        auto mb = L.matchBtn.toFloat();
-        const bool canMatch = proc.hasMatchData();
-        g.setColour (canMatch ? accentVio.withAlpha (0.16f) : whiteAlpha (0.05f));
-        g.fillRoundedRectangle (mb, 8.0f);
-        g.setColour (canMatch ? accentVio.withAlpha (0.45f) : whiteAlpha (0.08f));
-        g.drawRoundedRectangle (mb.reduced (0.5f), 8.0f, 1.0f);
-        g.setColour (canMatch ? juce::Colour (0xffb6abff) : text3.withAlpha (0.5f));
-        g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
-        g.drawText ("MATCH", mb, juce::Justification::centred);
-    }
+    paintMatchPanel (g, L);
 
     // bottom: divider, output dial caption/value, mode + hq
+    paintBottomBar (g, L);
+}
+
+void BandEditorRail::paintSliderSection (juce::Graphics& g, const Layout& L, int s) const
+{
+    const auto type  = selectedType();
+    const float freq = apvts.getRawParameterValue (ids::freq (s))->load();
+    const float gain = apvts.getRawParameterValue (ids::gain (s))->load();
+    const float q    = apvts.getRawParameterValue (ids::q (s))->load();
+    const int slope  = slopeIndexToValue ((int) apvts.getRawParameterValue (ids::slope (s))->load());
+    const bool cut   = isCut (type);
+
+    if (! showDyn)
+    {
+        drawSliderHead (g, L.freqBlock, "FREQUENCY", fmtFreq (freq) + "  " + noteName (freq), false);
+        drawSliderHead (g, L.gainBlock, "GAIN", cut ? juce::String ("—") : fmtGain (gain), cut);
+        drawSliderHead (g, L.qBlock, "Q / SLOPE",
+                        cut ? juce::String (slope) + " dB/oct  Q" + juce::String (q, 2)
+                            : "Q " + juce::String (q, 2), false);
+
+        // slope picker (cut filters only)
+        if (cut)
+        {
+            const std::array<int, 3> slopes { 12, 24, 48 };
+            for (int i = 0; i < 3; ++i)
+                drawChip (g, segment (L.slopeRow, i, 3, 5.0f), slope == slopes[i],
+                          juce::String (slopes[i]) + " dB/oct", 9.0f, 0.03f);
+        }
+        return;
+    }
+
+    if (cut)
+    {
+        // dynamics not available for cut/notch filters
+        g.setColour (text3.withAlpha (0.6f));
+        g.setFont (Fonts::grotesk (11.0f, Fonts::semibold).withExtraKerningFactor (0.04f));
+        g.drawText ("DYNAMICS AVAILABLE ON BELL / SHELF BANDS",
+                    L.freqBlock.getUnion (L.slopeRow), juce::Justification::centred);
+        return;
+    }
+
+    const bool dynOn = apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f;
+    const float thr  = apvts.getRawParameterValue (ids::dynThresh (s))->load();
+    const float rng  = apvts.getRawParameterValue (ids::dynRange (s))->load();
+    const float att  = apvts.getRawParameterValue (ids::dynAttack (s))->load();
+    const float rel  = apvts.getRawParameterValue (ids::dynRelease (s))->load();
+    const float live = proc.getDynGainDb (s);
+
+    drawToggle (g, L.dynEnable.toFloat(), dynOn, dynOn ? "DYNAMICS ON" : "DYNAMICS OFF");
+    drawSliderHead (g, L.dynS0, "THRESHOLD", juce::String (thr, 1) + " dB", ! dynOn);
+    drawSliderHead (g, L.dynS1, "RANGE",
+                    (rng >= 0 ? "+" : "") + juce::String (rng, 1) + " dB"
+                    + (dynOn && std::abs (live) > 0.05f ? "  (" + juce::String (live, 1) + ")" : ""),
+                    ! dynOn);
+    drawSliderHead (g, L.dynS2, "ATTACK",  juce::String (att, att < 10 ? 1 : 0) + " ms", ! dynOn);
+    drawSliderHead (g, L.dynS3, "RELEASE", juce::String (rel, 0) + " ms", ! dynOn);
+}
+
+void BandEditorRail::paintMatchPanel (juce::Graphics& g, const Layout& L) const
+{
+    auto label = L.matchLabel;
+    g.setColour (textLabel);
+    g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+    g.drawText ("EQ MATCH", label, juce::Justification::centredLeft);
+
+    auto srcChip = juce::Rectangle<float> ((float) label.getRight() - 78.0f, (float) label.getY(), 36.0f, 16.0f);
+    auto refChip = juce::Rectangle<float> ((float) label.getRight() - 38.0f, (float) label.getY(), 36.0f, 16.0f);
+    drawChip (g, srcChip, proc.hasSource(),    "SRC", 8.5f, 0.06f);
+    drawChip (g, refChip, proc.hasReference(), "REF", 8.5f, 0.06f);
+
+    g.setColour (textLabel);
+    g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+    g.drawText ("MATCH AMOUNT", L.matchAmtRow.withHeight (14), juce::Justification::centredLeft);
+    g.setColour (text2);
+    g.setFont (Fonts::mono (12.0f, true));
+    g.drawText (juce::String (juce::roundToInt (apvts.getRawParameterValue (ids::matchamount)->load())) + " %",
+                L.matchAmtRow.withHeight (14), juce::Justification::centredRight);
+
+    const bool capturing = proc.isCapturing();
+    drawToggle (g, L.captureBtn.toFloat(), capturing, capturing ? "CAPTURING" : "CAPTURE");
+
+    auto mb = L.matchBtn.toFloat();
+    const bool canMatch = proc.hasMatchData();
+    g.setColour (canMatch ? accentVio.withAlpha (0.16f) : whiteAlpha (0.05f));
+    g.fillRoundedRectangle (mb, 8.0f);
+    g.setColour (canMatch ? accentVio.withAlpha (0.45f) : whiteAlpha (0.08f));
+    g.drawRoundedRectangle (mb.reduced (0.5f), 8.0f, 1.0f);
+    g.setColour (canMatch ? juce::Colour (0xffb6abff) : text3.withAlpha (0.5f));
+    g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
+    g.drawText ("MATCH", mb, juce::Justification::centred);
+}
+
+void BandEditorRail::paintBottomBar (juce::Graphics& g, const Layout& L) const
+{
+    const bool ms   = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
+    const bool hq   = apvts.getRawParameterValue (ids::hq)->load() > 0.5f;
+    const float out = apvts.getRawParameterValue (ids::output)->load();
+
     g.setColour (whiteAlpha (0.08f));
     g.drawHorizontalLine (L.bottom.getY(), 0.0f, (float) getWidth());
 
@@ -445,6 +467,33 @@ void BandEditorRail::paint (juce::Graphics& g)
     drawToggle (g, L.autoBtn.toFloat(), ag, autoLabel);
 }
 
+bool BandEditorRail::handleSubRegionClick (const Layout& L, juce::Point<float> p, int s)
+{
+    if (showDyn)
+    {
+        if (! sitsOnZeroLine (selectedType()) && L.dynEnable.toFloat().contains (p))
+        {
+            setBool (ids::dynOn (s), ! (apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f));
+            refresh();
+            return true;
+        }
+        return false;
+    }
+
+    if (isCut (selectedType()))
+    {
+        for (int i = 0; i < 3; ++i)
+            if (segment (L.slopeRow, i, 3, 5.0f).contains (p))
+            {
+                setChoice (ids::slope (s), i);
+                repaint();
+                return true;
+            }
+    }
+
+    return false;
+}
+
 void BandEditorRail::mouseDown (const juce::MouseEvent& e)
 {
     auto L = computeLayout();
@@ -463,25 +512,8 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
             return;
         }
 
-    if (showDyn)
-    {
-        if (! sitsOnZeroLine (selectedType()) && L.dynEnable.toFloat().contains (p))
-        {
-            setBool (ids::dynOn (s), ! (apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f));
-            refresh();
-            return;
-        }
-    }
-    else if (isCut (selectedType()))
-    {
-        for (int i = 0; i < 3; ++i)
-            if (segment (L.slopeRow, i, 3, 5.0f).contains (p))
-            {
-                setChoice (ids::slope (s), i);
-                repaint();
-                return;
-            }
-    }
+    if (handleSubRegionClick (L, p, s))
+        return;
 
     auto onBtn = juce::Rectangle<int> (L.onSolo).removeFromLeft (L.onSolo.getWidth() / 2 - 3).toFloat();
     auto soloBtn = juce::Rectangle<int> (L.onSolo).removeFromRight (L.onSolo.getWidth() / 2 - 3).toFloat();
@@ -500,8 +532,8 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
     if (L.hqBtn.toFloat().contains (p))   { setBool (ids::hq, ! (apvts.getRawParameterValue (ids::hq)->load() > 0.5f)); repaint(); return; }
     if (L.autoBtn.toFloat().contains (p)) { setBool (ids::autogain, ! (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)); repaint(); return; }
 
-    if (L.captureBtn.toFloat().contains (p)) { if (onCapture) onCapture(); repaint(); return; }
-    if (L.matchBtn.toFloat().contains (p) && proc.hasMatchData()) { if (onMatch) onMatch(); repaint(); return; }
+    if (L.captureBtn.toFloat().contains (p)) { if (onCapture) { onCapture(); } repaint(); return; }
+    if (L.matchBtn.toFloat().contains (p) && proc.hasMatchData()) { if (onMatch) { onMatch(); } repaint(); return; }
 }
 
 } // namespace zeq

@@ -35,10 +35,14 @@ namespace ids
 }
 
 // Parameter ranges (shared by the engine and the UI mappings).
-inline constexpr float freqMin = 20.0f,   freqMax = 20000.0f;
-inline constexpr float gainMin = -18.0f,  gainMax = 18.0f;
-inline constexpr float qMin    = 0.1f,    qMax    = 18.0f;
-inline constexpr float outMin  = -24.0f,  outMax  = 24.0f;
+inline constexpr float freqMin = 20.0f;
+inline constexpr float freqMax = 20000.0f;
+inline constexpr float gainMin = -18.0f;
+inline constexpr float gainMax = 18.0f;
+inline constexpr float qMin    = 0.1f;
+inline constexpr float qMax    = 18.0f;
+inline constexpr float outMin  = -24.0f;
+inline constexpr float outMax  = 24.0f;
 
 inline juce::StringArray filterTypeChoices()
 {
@@ -65,7 +69,7 @@ inline int slopeValueToIndex (int v)
 // A log-frequency range that matches the design's f01 mapping (20 Hz .. 20 kHz).
 inline juce::NormalisableRange<float> makeFreqRange()
 {
-    juce::NormalisableRange<float> r (freqMin, freqMax,
+    juce::NormalisableRange<float> r (freqMin, freqMax, // NOSONAR(cpp:S6012): CTAD cannot deduce ValueType here — this ctor takes lambdas, not std::function
         [] (float start, float end, float t) { return start * std::pow (end / start, t); },
         [] (float start, float end, float v) { return std::log (v / start) / std::log (end / start); },
         [] (float start, float end, float v) { return juce::jlimit (start, end, v); });
@@ -74,7 +78,7 @@ inline juce::NormalisableRange<float> makeFreqRange()
 
 inline juce::NormalisableRange<float> makeQRange()
 {
-    juce::NormalisableRange<float> r (qMin, qMax,
+    juce::NormalisableRange<float> r (qMin, qMax, // NOSONAR(cpp:S6012): CTAD cannot deduce ValueType here — this ctor takes lambdas, not std::function
         [] (float start, float end, float t) { return start * std::pow (end / start, t); },
         [] (float start, float end, float v) { return std::log (v / start) / std::log (end / start); },
         [] (float start, float end, float v) { return juce::jlimit (start, end, v); });
@@ -90,7 +94,7 @@ inline juce::NormalisableRange<float> makeLogRange (float lo, float hi)
 }
 
 // The default six-band shape from the design handoff (README "Default bands").
-struct BandDefault { FilterType type; float freq, gain, q; int slope; };
+struct BandDefault { FilterType type; float freq; float gain; float q; int slope; };
 
 inline std::array<BandDefault, numBands> defaultBands()
 {

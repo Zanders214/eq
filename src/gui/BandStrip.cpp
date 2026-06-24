@@ -28,6 +28,11 @@ void BandStrip::paint (juce::Graphics& g)
         anySolo = anySolo || apvts.getRawParameterValue (ids::solo (i))->load() > 0.5f;
 
     for (int i = 0; i < numBands; ++i)
+        paintCell (g, i, sel, anySolo);
+}
+
+void BandStrip::paintCell (juce::Graphics& g, int i, int sel, bool anySolo) const
+{
     {
         auto cell = cellBounds (i);
         const auto type = static_cast<FilterType> ((int) apvts.getRawParameterValue (ids::type (i))->load());
@@ -103,7 +108,7 @@ void BandStrip::mouseDown (const juce::MouseEvent& e)
         if (pillBounds (cell).contains (e.position))
         {
             const bool on = apvts.getRawParameterValue (ids::on (i))->load() > 0.5f;
-            proc.recordUndoableEdit ([&]
+            proc.recordUndoableEdit ([this, i, on]
             {
                 if (auto* p = apvts.getParameter (ids::on (i)))
                     p->setValueNotifyingHost (on ? 0.0f : 1.0f);

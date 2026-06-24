@@ -97,7 +97,9 @@ void EqContent::resized()
     // Undo / redo buttons sit just left of the OUT readout (OUT box is laid out in
     // drawHeader at abA.getX() - 116) — plenty of empty header space there.
     const int outLeft = abA.getX() - 116;
-    const int bw = 26, bh = 22, cy = headerBounds.getCentreY();
+    const int bw = 26;
+    const int bh = 22;
+    const int cy = headerBounds.getCentreY();
     redoBtn = juce::Rectangle<int> (outLeft - 10 - bw,       cy - bh / 2, bw, bh);
     undoBtn = juce::Rectangle<int> (redoBtn.getX() - 4 - bw, cy - bh / 2, bw, bh);
 }
@@ -145,7 +147,7 @@ void EqContent::drawHeader (juce::Graphics& g)
     g.drawText ("EQ", hr.withTrimmedLeft ((int) zw + 2).withWidth (60), juce::Justification::centredLeft);
 
     // SHAPE badge
-    auto badge = juce::Rectangle<float> (hr.getX() + zw + 40.0f, (float) hr.getCentreY() - 10.0f, 56.0f, 20.0f);
+    auto badge = juce::Rectangle<float> (static_cast<float> (hr.getX()) + zw + 40.0f, (float) hr.getCentreY() - 10.0f, 56.0f, 20.0f);
     g.setColour (accent.withAlpha (0.12f));
     g.fillRoundedRectangle (badge, 10.0f);
     g.setColour (accent.withAlpha (0.30f));
@@ -178,7 +180,9 @@ void EqContent::drawHeader (juce::Graphics& g)
         g.setColour (whiteAlpha (0.08f));
         g.drawRoundedRectangle (r.reduced (0.5f), 6.0f, 1.0f);
         g.setColour ((enabled ? accent : text1).withAlpha (enabled ? 0.95f : 0.22f));
-        const float my = r.getCentreY(), x0 = r.getX() + 8.0f, x1 = r.getRight() - 8.0f;
+        const float my = r.getCentreY();
+        const float x0 = r.getX() + 8.0f;
+        const float x1 = r.getRight() - 8.0f;
         const juce::Line<float> ln = redo ? juce::Line<float> (x0, my, x1, my)
                                           : juce::Line<float> (x1, my, x0, my);
         g.drawArrow (ln, 1.6f, 6.5f, 6.0f);
@@ -192,7 +196,7 @@ void EqContent::drawHeader (juce::Graphics& g)
     {
         if (active)
         {
-            juce::ColourGradient grad (accent, r.getX(), r.getY(), accentVio, r.getX(), r.getBottom(), false);
+            juce::ColourGradient grad (accent, static_cast<float> (r.getX()), static_cast<float> (r.getY()), accentVio, static_cast<float> (r.getX()), static_cast<float> (r.getBottom()), false);
             g.setGradientFill (grad);
             g.fillRoundedRectangle (r.toFloat().reduced (1.0f), 6.0f);
             g.setColour (juce::Colours::white);
@@ -282,8 +286,8 @@ void ZandersEqEditor::resized()
     const float s = juce::jmin ((float) getWidth() / designW, (float) getHeight() / designH);
     content.setBounds (0, 0, designW, designH);
     content.setTransform (juce::AffineTransform::scale (s)
-                              .translated ((getWidth() - designW * s) * 0.5f,
-                                           (getHeight() - designH * s) * 0.5f));
+                              .translated ((static_cast<float> (getWidth()) - designW * s) * 0.5f,
+                                           (static_cast<float> (getHeight()) - designH * s) * 0.5f));
     proc.setEditorWidth (getWidth());
 }
 

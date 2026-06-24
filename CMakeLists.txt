@@ -39,8 +39,8 @@ endif()
 
 juce_add_plugin(ZandersEQ
     PRODUCT_NAME            "ZandersEQ"
-    COMPANY_NAME            "Neon Plugins"
-    BUNDLE_ID               "com.neonplugins.zanderseq"
+    COMPANY_NAME            "ZandersAudio"
+    BUNDLE_ID               "com.zandersaudio.zanderseq"
     PLUGIN_MANUFACTURER_CODE Neon
     PLUGIN_CODE             Zeq1
     FORMATS                 ${ZEQ_FORMATS}

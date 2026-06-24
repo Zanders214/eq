@@ -1,6 +1,8 @@
 #pragma once
 
+#include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_opengl/juce_opengl.h>
 #include "PluginProcessor.h"
 #include "gui/NeonLookAndFeel.h"
 #include "gui/EqGraphComponent.h"
@@ -15,7 +17,8 @@ namespace zeq
 // whatever window size the user picks (uniform zoom), so every absolute-pixel
 // layout and hit-test below stays exactly as designed.
 class EqContent : public juce::Component,
-                  private juce::Timer
+                  private juce::Timer,
+                  private juce::AudioProcessorParameter::Listener
 {
 public:
     explicit EqContent (ZandersEqAudioProcessor&);
@@ -29,6 +32,13 @@ public:
 private:
     void timerCallback() override;
     void drawHeader (juce::Graphics&);
+
+    // Any parameter change (UI edit, host automation, preset/undo) flags the
+    // static panels (strip/rail/preset bar/header) for a repaint on the next
+    // timer tick — so they are no longer repainted blindly every frame.
+    void parameterValueChanged (int, float) override { uiDirty.store (true, std::memory_order_relaxed); }
+    void parameterGestureChanged (int, bool) override {}
+    std::atomic<bool> uiDirty { true };
 
     ZandersEqAudioProcessor& proc;
     NeonLookAndFeel lnf;
@@ -48,7 +58,7 @@ class ZandersEqEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit ZandersEqEditor (ZandersEqAudioProcessor&);
-    ~ZandersEqEditor() override = default;
+    ~ZandersEqEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -60,6 +70,10 @@ private:
     ZandersEqAudioProcessor& proc;
     EqContent content;
     juce::ComponentBoundsConstrainer constrainer;
+
+    // GPU-accelerated rendering: offloads all the vector rasterisation (spectrum,
+    // curve, glows) from the CPU. Detached explicitly in the destructor.
+    juce::OpenGLContext openGLContext;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZandersEqEditor)
 };

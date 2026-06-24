@@ -17,7 +17,7 @@ public:
     explicit EqGraphComponent (ZandersEqAudioProcessor&);
 
     void paint (juce::Graphics&) override;
-    void resized() override {}
+    void resized() override { haveCurveKey = false; }   // force a curve rebuild on size change
 
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
@@ -74,6 +74,17 @@ private:
     static constexpr int numPoints = 240;
     std::array<float, numPoints> scope {};
     std::array<float, numPoints> peaks {};
+
+    // Cached summed-response curve: the 360-point × 6-band magnitude sweep is
+    // expensive, so it is rebuilt only when a band's static params (or the size)
+    // change. While any band is in dynamic mode the curve genuinely animates, so
+    // it is rebuilt every frame in that case (see drawCurve()).
+    juce::Path cachedCurve;
+    struct CurveKey { FilterType type; float freq, gain, q; int slope; bool live; };
+    std::array<CurveKey, numBands> lastCurveKey {};
+    bool   haveCurveKey = false;
+    int    cachedCurveW = -1, cachedCurveH = -1;
+    double cachedCurveSr = 0.0;   // sample rate affects coefficient shape — part of the key
 
     // EQ-match capture accumulators (message-thread only; raw power per log bin)
     std::array<double, kMatchBins> accumSrc {}, accumRef {};

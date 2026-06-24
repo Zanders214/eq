@@ -152,6 +152,20 @@ void BandEditorRail::refresh()
     repaint();
 }
 
+bool BandEditorRail::hasLiveReadout() const
+{
+    // Auto-gain shows a live trim figure on its toggle (any tab).
+    if (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)
+        return true;
+
+    // The DYN tab shows live gain reduction for an active dynamic band.
+    if (showDyn && ! sitsOnZeroLine (selectedType())
+        && apvts.getRawParameterValue (ids::dynOn (selected()))->load() > 0.5f)
+        return true;
+
+    return false;
+}
+
 BandEditorRail::Layout BandEditorRail::computeLayout() const
 {
     Layout L;

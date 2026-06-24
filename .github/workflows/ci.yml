@@ -60,6 +60,11 @@ jobs:
           chmod +x pluginval
 
       - name: Validate (pluginval, strictness 10)
+        # Disable the editor's OpenGL context here: pluginval opens/closes the editor
+        # under headless Xvfb with software GL only, where attaching a GL context is
+        # flaky. Real hosts still get GPU rendering; the module is still built/linked.
+        env:
+          ZEQ_DISABLE_GL: "1"
         run: >
           xvfb-run -a ./pluginval --strictness-level 10
           --validate build/ZandersEQ_artefacts/Release/VST3/ZandersEQ.vst3

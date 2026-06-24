@@ -238,16 +238,44 @@ void EqGraphComponent::drawCurve (juce::Graphics& g)
     for (int i = 0; i < numBands; ++i) bv[(size_t) i] = readBand (i);
 
     const int step = 2;
-    juce::Path curve;
-    for (int x = 0; x <= (int) w; x += step)
+
+    // Rebuild the summed curve only when something that affects it changed: the
+    // size, any band's static params, or — because dynamic EQ moves the curve in
+    // real time — any band currently in dynamic mode.
+    bool anyDyn = false;
+    for (auto& b : bv) anyDyn = anyDyn || b.dynOn;
+
+    bool keyChanged = ! haveCurveKey || (int) w != cachedCurveW || (int) h != cachedCurveH
+                   || sr != cachedCurveSr;
+    for (int i = 0; i < numBands && ! keyChanged; ++i)
     {
-        const float f = xToFreq ((float) x, w);
-        double db = 0.0;
-        for (auto& b : bv)
-            db += bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
-        const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
-        if (x == 0) curve.startNewSubPath ((float) x, y); else curve.lineTo ((float) x, y);
+        const auto& b = bv[(size_t) i]; const auto& k = lastCurveKey[(size_t) i];
+        keyChanged = b.type != k.type || b.freq != k.freq || b.gain != k.gain
+                  || b.q != k.q || b.slope != k.slope || b.live != k.live;
     }
+
+    if (keyChanged || anyDyn)
+    {
+        cachedCurve.clear();
+        for (int x = 0; x <= (int) w; x += step)
+        {
+            const float f = xToFreq ((float) x, w);
+            double db = 0.0;
+            for (auto& b : bv)
+                db += bandMagnitudeDb (b.type, b.freq, effectiveGain (b), b.q, b.slope, b.live, f, sr);
+            const float y = juce::jlimit (-2.0f, h + 2.0f, gainToY ((float) db, h));
+            if (x == 0) cachedCurve.startNewSubPath ((float) x, y); else cachedCurve.lineTo ((float) x, y);
+        }
+
+        for (int i = 0; i < numBands; ++i)
+        {
+            const auto& b = bv[(size_t) i];
+            lastCurveKey[(size_t) i] = { b.type, b.freq, b.gain, b.q, b.slope, b.live };
+        }
+        cachedCurveW = (int) w; cachedCurveH = (int) h; cachedCurveSr = sr; haveCurveKey = true;
+    }
+
+    const juce::Path& curve = cachedCurve;
 
     // faint fill to the 0 dB line
     juce::Path fill = curve;

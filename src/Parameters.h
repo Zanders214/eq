@@ -69,7 +69,7 @@ inline int slopeValueToIndex (int v)
 // A log-frequency range that matches the design's f01 mapping (20 Hz .. 20 kHz).
 inline juce::NormalisableRange<float> makeFreqRange()
 {
-    juce::NormalisableRange r (freqMin, freqMax,
+    juce::NormalisableRange<float> r (freqMin, freqMax, // NOSONAR(cpp:S6012): CTAD cannot deduce ValueType here — this ctor takes lambdas, not std::function
         [] (float start, float end, float t) { return start * std::pow (end / start, t); },
         [] (float start, float end, float v) { return std::log (v / start) / std::log (end / start); },
         [] (float start, float end, float v) { return juce::jlimit (start, end, v); });
@@ -78,7 +78,7 @@ inline juce::NormalisableRange<float> makeFreqRange()
 
 inline juce::NormalisableRange<float> makeQRange()
 {
-    juce::NormalisableRange r (qMin, qMax,
+    juce::NormalisableRange<float> r (qMin, qMax, // NOSONAR(cpp:S6012): CTAD cannot deduce ValueType here — this ctor takes lambdas, not std::function
         [] (float start, float end, float t) { return start * std::pow (end / start, t); },
         [] (float start, float end, float v) { return std::log (v / start) / std::log (end / start); },
         [] (float start, float end, float v) { return juce::jlimit (start, end, v); });

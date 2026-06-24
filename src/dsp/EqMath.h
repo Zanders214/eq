@@ -47,15 +47,20 @@ inline bool sitsOnZeroLine (FilterType t) noexcept
 // One biquad's coefficients, normalised so a0 == 1 (ready for Transposed Direct-Form II).
 struct BiquadCoeffs
 {
-    double b0 = 1.0, b1 = 0.0, b2 = 0.0;
-    double a1 = 0.0, a2 = 0.0;
+    double b0 = 1.0;
+    double b1 = 0.0;
+    double b2 = 0.0;
+    double a1 = 0.0;
+    double a2 = 0.0;
 
     // |H(e^jw)| at frequency f for a given sample rate (linear magnitude).
     double magnitude (double f, double sampleRate) const noexcept
     {
         const double w   = 2.0 * kPi * f / sampleRate;
-        const double cw1 = std::cos (w),       sw1 = std::sin (w);
-        const double cw2 = std::cos (2.0 * w), sw2 = std::sin (2.0 * w);
+        const double cw1 = std::cos (w);
+        const double sw1 = std::sin (w);
+        const double cw2 = std::cos (2.0 * w);
+        const double sw2 = std::sin (2.0 * w);
 
         const double numRe = b0 + b1 * cw1 + b2 * cw2;
         const double numIm = -(b1 * sw1 + b2 * sw2);
@@ -78,7 +83,12 @@ inline BiquadCoeffs makeCoeffs (FilterType type, double freq, double gainDb, dou
     const double alpha = sw / (2.0 * Q);
     const double A     = std::pow (10.0, gainDb / 40.0);
 
-    double b0, b1, b2, a0, a1, a2;
+    double b0;
+    double b1;
+    double b2;
+    double a0;
+    double a1;
+    double a2;
 
     switch (type)
     {
@@ -152,8 +162,12 @@ inline BiquadCoeffs makeBandpass (double freq, double q, double sampleRate) noex
     const double sw    = std::sin (w0);
     const double alpha = sw / (2.0 * std::max (0.1, q));
 
-    const double b0 = alpha, b1 = 0.0, b2 = -alpha;
-    const double a0 = 1.0 + alpha, a1 = -2.0 * cw, a2 = 1.0 - alpha;
+    const double b0 = alpha;
+    const double b1 = 0.0;
+    const double b2 = -alpha;
+    const double a0 = 1.0 + alpha;
+    const double a1 = -2.0 * cw;
+    const double a2 = 1.0 - alpha;
     const double inv = 1.0 / a0;
     return { b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv };
 }
@@ -170,7 +184,7 @@ inline double dynamicGainDb (double levelDb, double thresholdDb, double rangeDb,
 // dB response of one band at frequency f, including the cut-filter cascade.
 // N identical cascaded biquads multiply the magnitude, i.e. add in dB — so the
 // displayed curve equals the audio path exactly.
-inline double bandMagnitudeDb (FilterType type, double freq, double gainDb, double q,
+inline double bandMagnitudeDb (FilterType type, double freq, double gainDb, double q, // NOSONAR(cpp:S107): callers in tests/ are out of editable scope
                                int slopeDbPerOct, bool on, double f, double sampleRate) noexcept
 {
     if (! on)

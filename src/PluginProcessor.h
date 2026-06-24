@@ -27,11 +27,11 @@ struct AnalyzerFifo
     {
         if (fifoIndex == fftSize)
         {
-            if (! blockReady.load (std::memory_order_acquire))
+            if (! blockReady.load())
             {
                 std::fill (fftData.begin(), fftData.end(), 0.0f);
                 std::copy (fifo.begin(), fifo.end(), fftData.begin());
-                blockReady.store (true, std::memory_order_release);
+                blockReady.store (true);
             }
             fifoIndex = 0;
         }
@@ -39,21 +39,22 @@ struct AnalyzerFifo
     }
 };
 
-class ZandersEqAudioProcessor : public juce::AudioProcessor
+class ZandersEqAudioProcessor : public juce::AudioProcessor // NOSONAR(cpp:S1820,cpp:S1448): core JUCE processor; fields/methods are the plugin's API surface, splitting would ripple across the codebase
 {
 public:
     ZandersEqAudioProcessor();
     ~ZandersEqAudioProcessor() override = default;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override {} // nothing to free: oversampler/smoothers are reset in prepareToPlay
     bool isBusesLayoutSupported (const BusesLayout&) const override;
+    using juce::AudioProcessor::processBlock; // un-hide the double-precision overload
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "ZandersEQ"; }
+    const juce::String getName() const override { return "ZandersEQ"; } // NOSONAR(cpp:S5951) const return is mandated by the juce::AudioProcessor::getName override signature
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -61,9 +62,9 @@ public:
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
+    void setCurrentProgram (int) override { /* single fixed program: nothing to switch */ }
+    const juce::String getProgramName (int) override { return {}; } // NOSONAR(cpp:S5951) const return is mandated by the juce::AudioProcessor::getProgramName override signature
+    void changeProgramName (int, const juce::String&) override { /* programs are not user-renamable */ }
 
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int sizeInBytes) override;
@@ -101,7 +102,7 @@ public:
     // --- Undo/redo (whole-parameter snapshots; message-thread only) -----------
     void beginUndoTransaction();                          // capture the pre-edit state
     void commitUndoTransaction();                         // push it iff the edit changed anything
-    void recordUndoableEdit (std::function<void()> edit); // begin + edit + commit, for discrete edits
+    void recordUndoableEdit (const std::function<void()>& edit); // begin + edit + commit, for discrete edits
     bool canUndo() const noexcept { return ! undoStack.empty(); }
     bool canRedo() const noexcept { return ! redoStack.empty(); }
     void undo();
@@ -111,8 +112,8 @@ public:
     juce::File userPresetsDir() const;                       // created if missing
     bool savePresetToFile (const juce::File&) const;         // current params -> XML file
     bool loadPresetFromFile (const juce::File&);             // file -> params (undoable)
-    bool saveUserPreset (const juce::String& name);          // name -> dir/<name>.zeqpreset
-    bool deleteUserPreset (const juce::File&);
+    bool saveUserPreset (const juce::String& name) const;    // name -> dir/<name>.zeqpreset
+    bool deleteUserPreset (const juce::File&) const;
     juce::Array<juce::File> listUserPresets() const;         // sorted *.zeqpreset
     static juce::String presetExtension() { return ".zeqpreset"; }
 
@@ -139,6 +140,22 @@ private:
 
     void processEq (float* const* channels, int numChannels, int numSamples, double sr) noexcept;
 
+    // processBlock helpers (extracted to keep the audio callback readable).
+    void captureMatchTaps (juce::AudioBuffer<float>& buffer,
+                           const juce::AudioBuffer<float>& mainBus,
+                           int nSamples, int nCh, bool scEnabled) noexcept;
+    void resetSmoothersForRate (double procRate) noexcept;
+
+    // processEq helpers.
+    void updateBandCoeffsForBlock (int len, double sr, bool anySolo,
+                                   std::array<int, numBands>& lane,
+                                   std::array<bool, numBands>& dyn) noexcept;
+    void applyBandsStereo (float* const* channels, int pos, int len, bool ms,
+                           const std::array<int, numBands>& lane,
+                           const std::array<bool, numBands>& dyn) noexcept;
+    void applyBandsMono (float* const* channels, int pos, int len,
+                         const std::array<bool, numBands>& dyn) noexcept;
+
     juce::AudioProcessorValueTreeState apvts;
     std::array<BandParams, numBands> bandParams;
     std::atomic<float>* outputParam   = nullptr;
@@ -148,7 +165,8 @@ private:
 
     // DSP state
     std::array<BandDsp, numBands>                                bands;
-    std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>, numBands> freqSm, qSm;
+    std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>, numBands> freqSm;
+    std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>, numBands> qSm;
     std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>, numBands>          gainSm;
     std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>, numBands>          rangeSm;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>                                outputSm;
@@ -168,11 +186,14 @@ private:
 
     // EQ-match capture: lock-free taps fed pre-EQ (source) / from sidechain (reference)
     // while capturing; averaged curves are message-thread-only state.
-    AnalyzerFifo       captureSrc, captureRef;
+    AnalyzerFifo       captureSrc;
+    AnalyzerFifo       captureRef;
     std::atomic<bool>  capturing { false };
     std::atomic<bool>  sidechainOn { false };
-    std::array<float, kMatchBins> refCurve {}, srcCurve {};
-    bool hasRef = false, hasSrc = false;
+    std::array<float, kMatchBins> refCurve {};
+    std::array<float, kMatchBins> srcCurve {};
+    bool hasRef = false;
+    bool hasSrc = false;
 
     // Non-automated, persisted UI state.
     std::atomic<int> selectedBand { 3 };
@@ -182,11 +203,12 @@ private:
 
     // Undo/redo: stacks of full parameter snapshots (shares the A/B capture/restore).
     juce::ValueTree              pendingUndo;
-    std::vector<juce::ValueTree> undoStack, redoStack;
+    std::vector<juce::ValueTree> undoStack;
+    std::vector<juce::ValueTree> redoStack;
     static constexpr int         maxUndo = 64;
     void            snapshotInto (juce::ValueTree& dest) const; // fill dest with every param's value
     juce::ValueTree captureParams() const;
-    void            applyParams (const juce::ValueTree& snapshot);
+    void            applyParams (const juce::ValueTree& snapshot) const;
 
     static constexpr int controlBlock = 32;  // coeff refresh granularity (samples)
 

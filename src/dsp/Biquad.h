@@ -11,7 +11,8 @@ namespace zeq
 struct Biquad
 {
     BiquadCoeffs c;
-    float z1 = 0.0f, z2 = 0.0f;
+    float z1 = 0.0f;
+    float z2 = 0.0f;
 
     inline float processSample (float x) noexcept
     {
@@ -21,7 +22,7 @@ struct Biquad
         return y;
     }
 
-    void reset() noexcept { z1 = z2 = 0.0f; }
+    void reset() noexcept { z2 = 0.0f; z1 = z2; }
 };
 
 inline constexpr int maxCascade = 4; // 48 dB/oct = four cascaded biquads
@@ -38,7 +39,8 @@ struct BandDsp
     // Dynamic-EQ detector: a band-pass on the band's region + an envelope follower.
     Biquad detector;
     float env = 0.0f;
-    float attCoeff = 0.0f, relCoeff = 0.0f;
+    float attCoeff = 0.0f;
+    float relCoeff = 0.0f;
     float dynGainDb = 0.0f;
 
     void reset() noexcept

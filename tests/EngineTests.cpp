@@ -528,6 +528,74 @@ int main()
         tmp.deleteFile();
     }
 
+    // --- 13. Mono bus drives the single-channel band path (applyBandsMono) --
+    // Every other test runs stereo (applyBandsStereo); a mono main bus dispatches
+    // processEq to applyBandsMono instead. The band must still apply correctly.
+    {
+        ZandersEqAudioProcessor p;
+        flatBaseline (p);
+
+        auto layout = p.getBusesLayout();
+        layout.inputBuses.set  (0, juce::AudioChannelSet::mono());
+        layout.outputBuses.set (0, juce::AudioChannelSet::mono());
+        const bool monoOk = p.setBusesLayout (layout);
+        check (monoOk && numChans (p) == 1, "mono bus layout accepted", numChans (p));
+
+        setP (p, ids::on (0),   1.0f);
+        setP (p, ids::type (0), (float) (int) FilterType::bell);
+        setP (p, ids::freq (0), 1000.0f);
+        setP (p, ids::gain (0), 6.0f);
+        setP (p, ids::q (0),    1.0f);
+        p.prepareToPlay (sr, blockSize);
+
+        const double measured = runSineGainDb (p, 1000.0, 0.25);
+        check (within (measured, 6.0, 0.5), "mono path: bell +6 dB boosts a centre sine", measured);
+    }
+
+    // --- 14. EQ-match capture taps (captureMatchTaps) ----------------------
+    // With capturing enabled, processBlock taps the pre-EQ main signal (source) and,
+    // when a sidechain bus is present, the sidechain (reference). The taps are passive.
+    {
+        ZandersEqAudioProcessor p;
+        flatBaseline (p);
+        auto layout = p.getBusesLayout();
+        layout.inputBuses.set (1, juce::AudioChannelSet::stereo());   // enable the sidechain bus
+        const bool scOk = p.setBusesLayout (layout);
+        check (scOk, "sidechain bus layout accepted");
+
+        p.setCapturing (true);
+        check (p.isCapturing(), "capture enabled");
+        p.prepareToPlay (sr, blockSize);
+
+        const int nCh = numChans (p);                 // main(2) + sidechain(2)
+        juce::AudioBuffer<float> buf (nCh, blockSize);
+        juce::MidiBuffer midi;
+        bool finite = true;
+        long long n = 0;
+        for (int b = 0; b < 8; ++b)
+        {
+            for (int s = 0; s < blockSize; ++s, ++n)
+            {
+                const float x = (float) (0.25 * std::sin (2.0 * kPi * 1000.0 * (double) n / sr));
+                for (int c = 0; c < nCh; ++c) buf.setSample (c, s, x);
+            }
+            p.processBlock (buf, midi);
+            for (int c = 0; c < 2; ++c)                // main output channels stay finite
+                for (int s = 0; s < blockSize; ++s)
+                    finite = finite && std::isfinite (buf.getSample (c, s));
+        }
+        check (finite, "capture taps (source + sidechain) run cleanly");
+
+        // Capturing without a sidechain hits the early-return branch and must remain a
+        // passive tap: the processed audio is unchanged.
+        ZandersEqAudioProcessor p2;
+        flatBaseline (p2);
+        p2.setCapturing (true);
+        p2.prepareToPlay (sr, blockSize);
+        const double dev = maxDevVsScaledInput (p2, 1000.0, 0.25, 1.0);
+        check (dev < 1.0e-5, "capture tap is passive (flat output unchanged)", dev);
+    }
+
     std::printf ("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED",
                  failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;

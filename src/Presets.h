@@ -7,7 +7,7 @@ namespace zeq
 
 // The six presets from the handoff README. Each lists up to `numBands` bands;
 // any remaining bands are switched off when the preset is applied.
-struct PresetBand { FilterType type; float freq, gain, q; int slope; };
+struct PresetBand { FilterType type; float freq; float gain; float q; int slope; };
 struct Preset { const char* name; std::vector<PresetBand> bands; };
 
 inline const std::vector<Preset>& presets()
@@ -46,7 +46,7 @@ inline const std::vector<Preset>& presets()
     return p;
 }
 
-inline void applyPreset (juce::AudioProcessorValueTreeState& apvts, const Preset& preset)
+inline void applyPreset (const juce::AudioProcessorValueTreeState& apvts, const Preset& preset)
 {
     auto set = [&] (const juce::String& id, float v01)
     {
@@ -82,7 +82,7 @@ inline void applyPreset (juce::AudioProcessorValueTreeState& apvts, const Preset
 
 // True if the current parameter state matches this preset exactly (used to light
 // the active preset chip; any edit moves the state away and clears the highlight).
-inline bool matchesPreset (juce::AudioProcessorValueTreeState& apvts, const Preset& preset)
+inline bool matchesPreset (const juce::AudioProcessorValueTreeState& apvts, const Preset& preset)
 {
     auto approx = [] (float a, float b, float eps) { return std::abs (a - b) <= eps; };
 

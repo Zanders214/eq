@@ -9,7 +9,7 @@ namespace zeq
 // Shared access to the bundled brand faces (Space Grotesk + JetBrains Mono).
 struct Fonts
 {
-    enum Weight { medium = 0, semibold, bold };
+    enum Weight { medium = 0, semibold, bold }; // NOSONAR(cpp:S3642): enumerators used as Fonts::semibold/bold across many files outside this component; enum class would require Fonts::Weight:: qualification everywhere.
 
     static juce::Font grotesk (float height, Weight w = semibold);
     static juce::Font mono    (float height, bool mediumWeight = false);

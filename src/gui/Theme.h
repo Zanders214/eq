@@ -1,10 +1,11 @@
 #pragma once
 
+#include <array>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../dsp/EqMath.h"
 
 // Design tokens + graph mappings from the Neon Plugins handoff
-// (design/_ds/.../tokens/*.css and design/EQGraph.jsx).
+// (design/_ds/ ... /tokens/ ... css and design/EQGraph.jsx).
 namespace zeq::theme
 {
 
@@ -43,7 +44,7 @@ inline juce::Colour whiteAlpha (float a) { return juce::Colours::white.withAlpha
 inline juce::Colour rampColour (float t)
 {
     t = juce::jlimit (0.0f, 1.0f, t);
-    const juce::Colour stops[4] = { cyan, violet, pink, amber };
+    const std::array<juce::Colour, 4> stops = { cyan, violet, pink, amber };
     const float seg = t * 3.0f;
     const int   i   = juce::jmin (2, (int) seg);
     const float f   = seg - (float) i;
@@ -57,7 +58,8 @@ inline juce::Colour colourForFreq (float freq)
 }
 
 // ---- graph mappings (match EQGraph.jsx) -------------------------------------
-inline constexpr float fMin = 20.0f, fMax = 20000.0f;
+inline constexpr float fMin = 20.0f;
+inline constexpr float fMax = 20000.0f;
 inline const float logSpan = std::log (fMax / fMin);
 inline constexpr float dbRange = 18.0f;     // vertical half-range
 inline constexpr float vSpan   = 0.84f;     // fraction of half-height used by +-dbRange
@@ -80,7 +82,7 @@ inline juce::String noteName (float f)
 {
     if (f <= 0.0f)
         return {};
-    static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    static const std::array<const char*, 12> names = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
     const int midi = juce::roundToInt (69.0f + 12.0f * std::log2 (f / 440.0f));
     const int idx  = ((midi % 12) + 12) % 12;   // wrap negatives for very low notes
     return juce::String (names[idx]) + juce::String (midi / 12 - 1);

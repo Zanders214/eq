@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <cstring>
+#include <memory>
 namespace zeq
 {
 
@@ -108,6 +109,60 @@ bool ZandersEqAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts
     return true;
 }
 
+namespace
+{
+    // Sum a JUCE bus to mono per sample and push each averaged sample into a FIFO.
+    void pushBusToFifo (const juce::AudioBuffer<float>& bus, AnalyzerFifo& fifo, int nSamples, int channelsForAvg) noexcept
+    {
+        const int chans = bus.getNumChannels();
+        for (int s = 0; s < nSamples; ++s)
+        {
+            float m = 0.0f;
+            for (int c = 0; c < chans; ++c)
+                m += bus.getSample (c, s);
+            fifo.push (m / (float) channelsForAvg);
+        }
+    }
+
+    // Sum of squares across every channel of a JUCE bus (loudness measure).
+    double sumSquares (const juce::AudioBuffer<float>& bus, int nSamples) noexcept
+    {
+        double acc = 0.0;
+        for (int c = 0; c < bus.getNumChannels(); ++c)
+        {
+            const float* d = bus.getReadPointer (c);
+            for (int s = 0; s < nSamples; ++s)
+                acc += (double) d[s] * d[s];
+        }
+        return acc;
+    }
+}
+
+void ZandersEqAudioProcessor::captureMatchTaps (juce::AudioBuffer<float>& buffer,
+                                                const juce::AudioBuffer<float>& mainBus,
+                                                int nSamples, int nCh, bool scEnabled) noexcept
+{
+    pushBusToFifo (mainBus, captureSrc, nSamples, nCh);
+    if (! scEnabled)
+        return;
+
+    auto scBus = getBusBuffer (buffer, true, 1);
+    const int scCh = juce::jmax (1, scBus.getNumChannels());
+    pushBusToFifo (scBus, captureRef, nSamples, scCh);
+}
+
+void ZandersEqAudioProcessor::resetSmoothersForRate (double procRate) noexcept
+{
+    const double ramp = 0.025;
+    for (int i = 0; i < numBands; ++i)
+    {
+        freqSm[(size_t) i].reset (procRate, ramp);
+        gainSm[(size_t) i].reset (procRate, ramp);
+        qSm  [(size_t) i].reset (procRate, ramp);
+        rangeSm[(size_t) i].reset (procRate, ramp);
+    }
+}
+
 void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -119,26 +174,8 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     // EQ-match capture: source from the main bus (pre-EQ), reference from the sidechain.
     const bool scEnabled = getBus (true, 1) != nullptr && getBus (true, 1)->isEnabled();
     sidechainOn.store (scEnabled);
-    if (capturing.load (std::memory_order_relaxed))
-    {
-        for (int s = 0; s < nSamples; ++s)
-        {
-            float m = 0.0f;
-            for (int c = 0; c < mainBus.getNumChannels(); ++c) m += mainBus.getSample (c, s);
-            captureSrc.push (m / (float) nCh);
-        }
-        if (scEnabled)
-        {
-            auto scBus = getBusBuffer (buffer, true, 1);
-            const int scCh = juce::jmax (1, scBus.getNumChannels());
-            for (int s = 0; s < nSamples; ++s)
-            {
-                float m = 0.0f;
-                for (int c = 0; c < scBus.getNumChannels(); ++c) m += scBus.getSample (c, s);
-                captureRef.push (m / (float) scCh);
-            }
-        }
-    }
+    if (capturing.load())
+        captureMatchTaps (buffer, mainBus, nSamples, nCh, scEnabled);
 
     const bool hq = hqParam->load() > 0.5f;
     const double procRate = baseSampleRate * (hq ? 2.0 : 1.0);
@@ -150,14 +187,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     }
     if (procRate != smootherRate)
     {
-        const double ramp = 0.025;
-        for (int i = 0; i < numBands; ++i)
-        {
-            freqSm[(size_t) i].reset (procRate, ramp);
-            gainSm[(size_t) i].reset (procRate, ramp);
-            qSm  [(size_t) i].reset (procRate, ramp);
-            rangeSm[(size_t) i].reset (procRate, ramp);
-        }
+        resetSmoothersForRate (procRate);
         smootherRate = procRate;   // output/auto-gain stay at base rate (applied post-downsample)
     }
 
@@ -172,14 +202,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 
     // Input level (pre-EQ), for auto-gain loudness matching.
     const bool autogain = autogainParam->load() > 0.5f;
-    double inSumSq = 0.0;
-    if (autogain)
-        for (int c = 0; c < mainBus.getNumChannels(); ++c)
-        {
-            const float* d = mainBus.getReadPointer (c);
-            for (int s = 0; s < nSamples; ++s)
-                inSumSq += (double) d[s] * d[s];
-        }
+    const double inSumSq = autogain ? sumSquares (mainBus, nSamples) : 0.0;
 
     // Filtering only (no gain) — at base rate or 2x inside the oversampler.
     if (hq)
@@ -201,13 +224,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     // Auto-gain: trim so post-EQ loudness matches the input (clamped to +-12 dB).
     if (autogain)
     {
-        double outSumSq = 0.0;
-        for (int c = 0; c < mainBus.getNumChannels(); ++c)
-        {
-            const float* d = mainBus.getReadPointer (c);
-            for (int s = 0; s < nSamples; ++s)
-                outSumSq += (double) d[s] * d[s];
-        }
+        const double outSumSq = sumSquares (mainBus, nSamples);
         if (outSumSq > 1.0e-9 && inSumSq > 1.0e-9)
         {
             const float trim = juce::jlimit (0.25f, 4.0f, (float) std::sqrt (inSumSq / outSumSq));
@@ -229,13 +246,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     autoGainDb.store (juce::Decibels::gainToDecibels (autoGainSm.getCurrentValue()));
 
     // Feed the analyzer with the post-EQ (output) signal, summed to mono.
-    for (int s = 0; s < nSamples; ++s)
-    {
-        float m = 0.0f;
-        for (int c = 0; c < nCh; ++c)
-            m += mainBus.getSample (c, s);
-        analyzer.push (m / (float) nCh);
-    }
+    pushBusToFifo (mainBus, analyzer, nSamples, nCh);
 }
 
 void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels,
@@ -264,111 +275,133 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
     {
         const int len = juce::jmin (controlBlock, numSamples - pos);
 
-        for (int i = 0; i < numBands; ++i)
-        {
-            const float f = freqSm[(size_t) i].getNextValue();
-            const float g = gainSm[(size_t) i].getNextValue();
-            const float qq = qSm[(size_t) i].getNextValue();
-            const float rng = rangeSm[(size_t) i].getNextValue();
-            if (len > 1) { freqSm[(size_t) i].skip (len - 1); gainSm[(size_t) i].skip (len - 1); qSm[(size_t) i].skip (len - 1); rangeSm[(size_t) i].skip (len - 1); }
-
-            const auto type   = static_cast<FilterType> ((int) bandParams[(size_t) i].type->load());
-            const int  slope  = slopeIndexToValue ((int) bandParams[(size_t) i].slope->load());
-            const bool on     = bandParams[(size_t) i].on->load() > 0.5f;
-            const bool solo   = bandParams[(size_t) i].solo->load() > 0.5f;
-            const bool active = on && (! anySolo || solo);
-            const int  chMode = (int) bandParams[(size_t) i].channel->load();
-            lane[(size_t) i]  = chMode;
-
-            const bool laneChanged = chMode != lastChannel[(size_t) i];
-            if (active != bands[(size_t) i].active || laneChanged)
-            {
-                if (! active || laneChanged)
-                    bands[(size_t) i].reset();
-                bands[(size_t) i].active = active;
-            }
-            lastChannel[(size_t) i] = chMode;
-
-            // Dynamic EQ (bell/shelf only): fold the detector-driven offset into gain.
-            const bool dynActive = active && bandParams[(size_t) i].dynOn->load() > 0.5f && ! sitsOnZeroLine (type);
-            dyn[(size_t) i] = dynActive;
-            float effGain = g;
-            if (dynActive)
-            {
-                const double levelDb = juce::Decibels::gainToDecibels (bands[(size_t) i].env + 1.0e-9f);
-                const double offs = dynamicGainDb (levelDb, (double) bandParams[(size_t) i].dynThresh->load(), (double) rng);
-                effGain = g + (float) offs;
-                bands[(size_t) i].dynGainDb = (float) offs;
-                bands[(size_t) i].updateDetector (f, juce::jlimit (0.5f, 4.0f, qq),
-                                                  (double) bandParams[(size_t) i].dynAttack->load(),
-                                                  (double) bandParams[(size_t) i].dynRelease->load(), sr);
-                dynGainDisplay[(size_t) i].store ((float) offs);
-            }
-            else
-            {
-                bands[(size_t) i].dynGainDb = 0.0f;
-                bands[(size_t) i].env = 0.0f;   // restart clean when dynamics are re-enabled
-                dynGainDisplay[(size_t) i].store (0.0f);
-            }
-
-            if (active)
-                bands[(size_t) i].updateCoeffs (type, f, effGain, qq, slope, sr);
-        }
+        updateBandCoeffsForBlock (len, sr, anySolo, lane, dyn);
 
         if (stereo)
-        {
-            float* L = channels[0];
-            float* R = channels[1];
-            for (int s = pos; s < pos + len; ++s)
-            {
-                // detector keys off the pre-EQ input (mono), independent of band order/domain
-                const float det = 0.5f * (L[s] + R[s]);
-                // canonical lane pair for the whole chain: L/R, or M/S (encoded once)
-                float a = ms ? 0.5f * (L[s] + R[s]) : L[s];
-                float b = ms ? 0.5f * (L[s] - R[s]) : R[s];
-                for (int i = 0; i < numBands; ++i)
-                    if (bands[(size_t) i].active)
-                    {
-                        if (dyn[(size_t) i])
-                            bands[(size_t) i].pushDetector (det);
-                        applyBand (bands[(size_t) i], lane[(size_t) i], a, b);
-                    }
-                if (ms) { L[s] = a + b; R[s] = a - b; }
-                else    { L[s] = a;     R[s] = b;     }
-            }
-        }
-        else // mono: lane-agnostic, filter the single channel through state set 0
-        {
-            float* M = channels[0];
-            for (int s = pos; s < pos + len; ++s)
-            {
-                const float in = M[s];   // detect on the pre-EQ input
-                float x = M[s];
-                for (int i = 0; i < numBands; ++i)
-                    if (bands[(size_t) i].active)
-                    {
-                        if (dyn[(size_t) i])
-                            bands[(size_t) i].pushDetector (in);
-                        x = bands[(size_t) i].processSample (0, x);
-                    }
-                M[s] = x;
-            }
-        }
+            applyBandsStereo (channels, pos, len, ms, lane, dyn);
+        else
+            applyBandsMono (channels, pos, len, dyn);
+
         pos += len;
+    }
+}
+
+// Advance the smoothers and refresh each band's coefficients/dynamics for one control sub-block.
+void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool anySolo,
+                                                        std::array<int, numBands>& lane,
+                                                        std::array<bool, numBands>& dyn) noexcept
+{
+    for (int i = 0; i < numBands; ++i)
+    {
+        const float f = freqSm[(size_t) i].getNextValue();
+        const float g = gainSm[(size_t) i].getNextValue();
+        const float qq = qSm[(size_t) i].getNextValue();
+        const float rng = rangeSm[(size_t) i].getNextValue();
+        if (len > 1) { freqSm[(size_t) i].skip (len - 1); gainSm[(size_t) i].skip (len - 1); qSm[(size_t) i].skip (len - 1); rangeSm[(size_t) i].skip (len - 1); }
+
+        const auto type   = static_cast<FilterType> ((int) bandParams[(size_t) i].type->load());
+        const int  slope  = slopeIndexToValue ((int) bandParams[(size_t) i].slope->load());
+        const bool on     = bandParams[(size_t) i].on->load() > 0.5f;
+        const bool solo   = bandParams[(size_t) i].solo->load() > 0.5f;
+        const bool active = on && (! anySolo || solo);
+        const int  chMode = (int) bandParams[(size_t) i].channel->load();
+        lane[(size_t) i]  = chMode;
+
+        if (const bool laneChanged = chMode != lastChannel[(size_t) i];
+            active != bands[(size_t) i].active || laneChanged)
+        {
+            if (! active || laneChanged)
+                bands[(size_t) i].reset();
+            bands[(size_t) i].active = active;
+        }
+        lastChannel[(size_t) i] = chMode;
+
+        // Dynamic EQ (bell/shelf only): fold the detector-driven offset into gain.
+        const bool dynActive = active && bandParams[(size_t) i].dynOn->load() > 0.5f && ! sitsOnZeroLine (type);
+        dyn[(size_t) i] = dynActive;
+        float effGain = g;
+        if (dynActive)
+        {
+            const double levelDb = juce::Decibels::gainToDecibels (bands[(size_t) i].env + 1.0e-9f);
+            const double offs = dynamicGainDb (levelDb, (double) bandParams[(size_t) i].dynThresh->load(), (double) rng);
+            effGain = g + (float) offs;
+            bands[(size_t) i].dynGainDb = (float) offs;
+            bands[(size_t) i].updateDetector (f, juce::jlimit (0.5f, 4.0f, qq),
+                                              (double) bandParams[(size_t) i].dynAttack->load(),
+                                              (double) bandParams[(size_t) i].dynRelease->load(), sr);
+            dynGainDisplay[(size_t) i].store ((float) offs);
+        }
+        else
+        {
+            bands[(size_t) i].dynGainDb = 0.0f;
+            bands[(size_t) i].env = 0.0f;   // restart clean when dynamics are re-enabled
+            dynGainDisplay[(size_t) i].store (0.0f);
+        }
+
+        if (active)
+            bands[(size_t) i].updateCoeffs (type, f, effGain, qq, slope, sr);
+    }
+}
+
+// Stereo (or M/S) path: filter the canonical lane pair through every active band.
+void ZandersEqAudioProcessor::applyBandsStereo (float* const* channels, int pos, int len, bool ms,
+                                                const std::array<int, numBands>& lane,
+                                                const std::array<bool, numBands>& dyn) noexcept
+{
+    float* L = channels[0];
+    float* R = channels[1];
+    for (int s = pos; s < pos + len; ++s)
+    {
+        // detector keys off the pre-EQ input (mono), independent of band order/domain
+        const float det = 0.5f * (L[s] + R[s]);
+        // canonical lane pair for the whole chain: L/R, or M/S (encoded once)
+        float a = ms ? 0.5f * (L[s] + R[s]) : L[s];
+        float b = ms ? 0.5f * (L[s] - R[s]) : R[s];
+        for (int i = 0; i < numBands; ++i)
+        {
+            if (! bands[(size_t) i].active)
+                continue;
+            if (dyn[(size_t) i])
+                bands[(size_t) i].pushDetector (det);
+            applyBand (bands[(size_t) i], lane[(size_t) i], a, b);
+        }
+        if (ms) { L[s] = a + b; R[s] = a - b; }
+        else    { L[s] = a;     R[s] = b;     }
+    }
+}
+
+// Mono path: lane-agnostic, filter the single channel through state set 0.
+void ZandersEqAudioProcessor::applyBandsMono (float* const* channels, int pos, int len,
+                                              const std::array<bool, numBands>& dyn) noexcept
+{
+    float* M = channels[0];
+    for (int s = pos; s < pos + len; ++s)
+    {
+        const float in = M[s];   // detect on the pre-EQ input
+        float x = M[s];
+        for (int i = 0; i < numBands; ++i)
+        {
+            if (! bands[(size_t) i].active)
+                continue;
+            if (dyn[(size_t) i])
+                bands[(size_t) i].pushDetector (in);
+            x = bands[(size_t) i].processSample (0, x);
+        }
+        M[s] = x;
     }
 }
 
 juce::AudioProcessorEditor* ZandersEqAudioProcessor::createEditor()
 {
-    return new ZandersEqEditor (*this);
+    return std::make_unique<ZandersEqEditor> (*this).release();
 }
 
 // Fill `dest` with the normalised value of every host-automatable parameter.
 void ZandersEqAudioProcessor::snapshotInto (juce::ValueTree& dest) const
 {
-    forEachParamId ([&] (const juce::String& id)
+    forEachParamId ([this, &dest] (const juce::String& id)
     {
-        if (auto* p = apvts.getParameter (id))
+        if (const auto* p = apvts.getParameter (id))
             dest.setProperty (id, p->getValue(), nullptr);
     });
 }
@@ -380,9 +413,9 @@ juce::ValueTree ZandersEqAudioProcessor::captureParams() const
     return t;
 }
 
-void ZandersEqAudioProcessor::applyParams (const juce::ValueTree& snapshot)
+void ZandersEqAudioProcessor::applyParams (const juce::ValueTree& snapshot) const
 {
-    forEachParamId ([&] (const juce::String& id)
+    forEachParamId ([this, &snapshot] (const juce::String& id)
     {
         if (snapshot.hasProperty (id))
             if (auto* p = apvts.getParameter (id))
@@ -421,7 +454,7 @@ void ZandersEqAudioProcessor::commitUndoTransaction()
     pendingUndo = {};
 }
 
-void ZandersEqAudioProcessor::recordUndoableEdit (std::function<void()> edit)
+void ZandersEqAudioProcessor::recordUndoableEdit (const std::function<void()>& edit)
 {
     beginUndoTransaction();
     if (edit) edit();
@@ -472,11 +505,11 @@ bool ZandersEqAudioProcessor::loadPresetFromFile (const juce::File& file)
     auto tree = juce::ValueTree::fromXml (*xml);
     if (! tree.isValid())
         return false;
-    recordUndoableEdit ([&] { applyParams (tree); });   // loading a preset is one undo step
+    recordUndoableEdit ([this, &tree] { applyParams (tree); });   // loading a preset is one undo step
     return true;
 }
 
-bool ZandersEqAudioProcessor::saveUserPreset (const juce::String& name)
+bool ZandersEqAudioProcessor::saveUserPreset (const juce::String& name) const
 {
     const auto clean = juce::File::createLegalFileName (name).trim();
     if (clean.isEmpty())
@@ -484,7 +517,7 @@ bool ZandersEqAudioProcessor::saveUserPreset (const juce::String& name)
     return savePresetToFile (userPresetsDir().getChildFile (clean + presetExtension()));
 }
 
-bool ZandersEqAudioProcessor::deleteUserPreset (const juce::File& file)
+bool ZandersEqAudioProcessor::deleteUserPreset (const juce::File& file) const
 {
     return file.existsAsFile() && file.deleteFile();
 }
@@ -512,7 +545,8 @@ void ZandersEqAudioProcessor::clearCaptureCurves()
 {
     refCurve.fill (0.0f);
     srcCurve.fill (0.0f);
-    hasRef = hasSrc = false;
+    hasSrc = false;
+    hasRef = false;
 }
 
 void ZandersEqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -534,7 +568,7 @@ void ZandersEqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void ZandersEqAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void ZandersEqAudioProcessor::setStateInformation (const void* data, int sizeInBytes) // NOSONAR(cpp:S5008) const void* signature is mandated by the juce::AudioProcessor::setStateInformation override
 {
     auto xml = getXmlFromBinary (data, sizeInBytes);
     if (xml == nullptr)
@@ -572,5 +606,5 @@ void ZandersEqAudioProcessor::setStateInformation (const void* data, int sizeInB
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new zeq::ZandersEqAudioProcessor();
+    return std::make_unique<zeq::ZandersEqAudioProcessor>().release();
 }

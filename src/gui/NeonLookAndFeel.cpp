@@ -4,7 +4,7 @@
 namespace zeq
 {
 
-static juce::Typeface::Ptr loadFace (const void* data, int size)
+static juce::Typeface::Ptr loadFace (const char* data, int size)
 {
     return juce::Typeface::createSystemTypefaceFor (data, (size_t) size);
 }
@@ -15,7 +15,11 @@ juce::Font Fonts::grotesk (float height, Weight w)
     static auto sem = loadFace (BinaryData::SpaceGroteskSemiBold_ttf, BinaryData::SpaceGroteskSemiBold_ttfSize);
     static auto bld = loadFace (BinaryData::SpaceGroteskBold_ttf,     BinaryData::SpaceGroteskBold_ttfSize);
 
-    auto tf = w == bold ? bld : (w == medium ? med : sem);
+    juce::Typeface::Ptr tf = sem;
+    if (w == bold)
+        tf = bld;
+    else if (w == medium)
+        tf = med;
     return juce::Font (juce::FontOptions().withTypeface (tf).withHeight (height));
 }
 
@@ -94,8 +98,8 @@ void NeonLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, 
 {
     const float cy = (float) y + (float) h * 0.5f;
     const float trackH = 5.0f;
-    const float left = (float) x;
-    const float right = (float) (x + w);
+    const auto left = (float) x;
+    const auto right = (float) (x + w);
     auto track = juce::Rectangle<float> (left, cy - trackH * 0.5f, (float) w, trackH);
 
     // unfilled track
@@ -120,7 +124,7 @@ void NeonLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, 
 
     // round handle
     const float hr = 7.0f;
-    juce::Point<float> thumb (juce::jlimit (left + hr, right - hr, sliderPos), cy);
+    juce::Point thumb { juce::jlimit (left + hr, right - hr, sliderPos), cy };
     auto thumbCol = theme::rampColour ((thumb.x - left) / juce::jmax (1.0f, right - left));
 
     glow (g, { thumb.x - hr, thumb.y - hr, hr * 2.0f, hr * 2.0f }, thumbCol, 5.0f, 0.45f);
@@ -139,7 +143,8 @@ void NeonLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, 
     auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h);
     const float size = juce::jmin (bounds.getWidth(), bounds.getHeight());
     auto area = juce::Rectangle<float> (size, size).withCentre (bounds.getCentre());
-    const float cx = area.getCentreX(), cyc = area.getCentreY();
+    const float cx = area.getCentreX();
+    const float cyc = area.getCentreY();
     const float radius = size * 0.5f;
     const float arcR = radius - 5.0f;
     const float toAngle = startAngle + pos * (endAngle - startAngle);
@@ -167,10 +172,10 @@ void NeonLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, 
     g.strokePath (val, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     // indicator
-    juce::Point<float> tip (cx + std::sin (toAngle) * (arcR - 3.0f),
-                            cyc - std::cos (toAngle) * (arcR - 3.0f));
-    juce::Point<float> root (cx + std::sin (toAngle) * (arcR * 0.4f),
-                             cyc - std::cos (toAngle) * (arcR * 0.4f));
+    juce::Point tip { cx + std::sin (toAngle) * (arcR - 3.0f),
+                      cyc - std::cos (toAngle) * (arcR - 3.0f) };
+    juce::Point root { cx + std::sin (toAngle) * (arcR * 0.4f),
+                       cyc - std::cos (toAngle) * (arcR * 0.4f) };
     g.setColour (theme::textBright);
     g.drawLine ({ root, tip }, 2.0f);
     g.fillEllipse (tip.x - 2.5f, tip.y - 2.5f, 5.0f, 5.0f);

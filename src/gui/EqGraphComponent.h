@@ -11,13 +11,13 @@ namespace zeq
 // The hero: log-frequency grid, a live FFT spectrum, the summed response curve,
 // and one draggable node per band. Curve and audio come from the same math, so
 // the display can never lie.
-class EqGraphComponent : public juce::Component
+class EqGraphComponent : public juce::Component // NOSONAR(cpp:S5414): public data member onSelectionChanged is assigned externally (PluginEditor.cpp); must stay public
 {
 public:
     explicit EqGraphComponent (ZandersEqAudioProcessor&);
 
     void paint (juce::Graphics&) override;
-    void resized() override {}
+    void resized() override {} // intentionally empty: this component has no child layout to arrange
 
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
@@ -35,8 +35,17 @@ public:
     std::function<void()> onSelectionChanged;
 
 private:
-    struct BandView { FilterType type; float freq, gain, q; int slope; bool on; bool live; int channel;
-                      bool dynOn; float range; float dynGain; };
+    struct BandView { FilterType type;
+                      float freq;
+                      float gain;
+                      float q;
+                      int slope;
+                      bool on;
+                      bool live;
+                      int channel;
+                      bool dynOn;
+                      float range;
+                      float dynGain; };
 
     BandView readBand (int i) const;
     bool anySolo() const;
@@ -49,19 +58,23 @@ private:
     float snapToSpectrumPeak (float x) const; // nearest analyzer peak frequency
     int   beginSpectrumGrab (float x);        // create+select a bell at a resonance
 
-    void setParam (const juce::String& id, float realValue);
-    void setChoice (const juce::String& id, int index);
-    void setBool (const juce::String& id, bool v);
-    void beginGesture (const juce::String& id);
-    void endGesture (const juce::String& id);
+    void setParam (const juce::String& id, float realValue) const;
+    void setChoice (const juce::String& id, int index) const;
+    void setBool (const juce::String& id, bool v) const;
+    void beginGesture (const juce::String& id) const;
+    void endGesture (const juce::String& id) const;
 
-    void drawGrid (juce::Graphics&);
+    void drawGrid (juce::Graphics&) const;
     void drawSpectrum (juce::Graphics&);
-    void drawCurve (juce::Graphics&);
-    void drawNodes (juce::Graphics&);
+    void drawCurve (juce::Graphics&) const;
+    void drawNodes (juce::Graphics&) const;
+    void drawChannelBadge (juce::Graphics&, const BandView& b, juce::Point<float> pos,
+                           juce::Colour col, float r, bool ms) const;
+    void drawDynamicHandles (juce::Graphics&, const BandView& b, juce::Point<float> pos,
+                             juce::Colour col) const;
 
     // EQ-match capture helpers
-    void accumulateTap (AnalyzerFifo&, std::array<double, kMatchBins>&, int& frames);
+    void accumulateTap (AnalyzerFifo&, std::array<double, kMatchBins>&, int& frames) const;
     void finishCapture();
 
     ZandersEqAudioProcessor& proc;
@@ -76,8 +89,10 @@ private:
     std::array<float, numPoints> peaks {};
 
     // EQ-match capture accumulators (message-thread only; raw power per log bin)
-    std::array<double, kMatchBins> accumSrc {}, accumRef {};
-    int capFramesSrc = 0, capFramesRef = 0;
+    std::array<double, kMatchBins> accumSrc {};
+    std::array<double, kMatchBins> accumRef {};
+    int capFramesSrc = 0;
+    int capFramesRef = 0;
 
     // drag state
     int dragBand = -1;

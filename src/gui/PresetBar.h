@@ -9,7 +9,7 @@ namespace zeq
 // Row of six built-in preset chips plus SAVE / LOAD buttons for user presets.
 // Click a chip to apply (it lights when the current state matches); SAVE writes the
 // current state to a named .zeqpreset file; LOAD opens a menu of saved presets.
-class PresetBar : public juce::Component
+class PresetBar : public juce::Component // NOSONAR(cpp:S5414): public onPresetApplied is set externally (PluginEditor.cpp); cannot be made private
 {
 public:
     explicit PresetBar (ZandersEqAudioProcessor&);

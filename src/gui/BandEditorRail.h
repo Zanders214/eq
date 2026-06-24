@@ -23,6 +23,11 @@ public:
     void bindToSelected();   // rebind the FREQ/GAIN/Q sliders to the selected band
     void refresh();          // poll values, update dynamic styling, repaint
 
+    // True while the rail shows a continuously-updating readout (dynamic-EQ gain
+    // reduction, or the auto-gain trim), so the editor keeps it repainting even
+    // when no parameter changed.
+    bool hasLiveReadout() const;
+
     std::function<void()> onCapture;   // EQ-match: start/stop capture
     std::function<void()> onMatch;     // EQ-match: apply the fit
 

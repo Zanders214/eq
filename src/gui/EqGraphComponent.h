@@ -17,7 +17,7 @@ public:
     explicit EqGraphComponent (ZandersEqAudioProcessor&);
 
     void paint (juce::Graphics&) override;
-    void resized() override {} // intentionally empty: this component has no child layout to arrange
+    void resized() override { haveCurveKey = false; }   // force a curve rebuild on size change
 
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
@@ -67,6 +67,9 @@ private:
     void drawGrid (juce::Graphics&) const;
     void drawSpectrum (juce::Graphics&);
     void drawCurve (juce::Graphics&) const;
+    // Curve cache helpers (keep drawCurve's cognitive complexity low).
+    bool curveCacheStale (const std::array<BandView, numBands>& bv, float w, float h, double sr) const;
+    void rebuildCurve    (const std::array<BandView, numBands>& bv, float w, float h, double sr) const;
     void drawNodes (juce::Graphics&) const;
     void drawChannelBadge (juce::Graphics&, const BandView& b, juce::Point<float> pos,
                            juce::Colour col, float r, bool ms) const;
@@ -87,6 +90,27 @@ private:
     static constexpr int numPoints = 240;
     std::array<float, numPoints> scope {};
     std::array<float, numPoints> peaks {};
+
+    // Cached summed-response curve: the 360-point × 6-band magnitude sweep is
+    // expensive, so it is rebuilt only when a band's static params (or the size)
+    // change. While any band is in dynamic mode the curve genuinely animates, so
+    // it is rebuilt every frame in that case (see drawCurve()). Mutable because
+    // drawCurve() is const but caches into these.
+    struct CurveKey
+    {
+        FilterType type;
+        float freq;
+        float gain;
+        float q;
+        int slope;
+        bool live;
+    };
+    mutable juce::Path cachedCurve;
+    mutable std::array<CurveKey, numBands> lastCurveKey {};
+    mutable bool   haveCurveKey = false;
+    mutable int    cachedCurveW = -1;
+    mutable int    cachedCurveH = -1;
+    mutable double cachedCurveSr = 0.0;   // sample rate affects coefficient shape — part of the key
 
     // EQ-match capture accumulators (message-thread only; raw power per log bin)
     std::array<double, kMatchBins> accumSrc {};

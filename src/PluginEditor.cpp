@@ -30,22 +30,40 @@ EqContent::EqContent (ZandersEqAudioProcessor& p)
     rail.onCapture = [this] { graph.toggleCapture(); };
     rail.onMatch   = [this] { graph.runMatch(); strip.repaint(); rail.refresh(); graph.repaint(); };
 
-    startTimerHz (60);
+    for (auto* param : proc.getParameters())
+        param->addListener (this);
+
+    startTimerHz (30);
 }
 
 EqContent::~EqContent()
 {
+    for (auto* param : proc.getParameters())
+        param->removeListener (this);
+
     setLookAndFeel (nullptr);
 }
 
 void EqContent::timerCallback()
 {
+    // The spectrum (and any live dynamic-EQ node) is the only thing that moves
+    // every frame, so only the graph is repainted unconditionally.
     graph.updateAnimation();
     graph.repaint();
-    strip.repaint();
-    presetBar.repaint();
-    rail.refresh();
-    repaint (headerBounds);
+
+    // The static panels only change when a parameter does — repaint them lazily.
+    if (uiDirty.exchange (false))
+    {
+        strip.repaint();
+        presetBar.repaint();
+        rail.refresh();
+        repaint (headerBounds);
+    }
+    else if (rail.hasLiveReadout())
+    {
+        // Dynamic-EQ gain reduction / auto-gain trim update continuously.
+        rail.repaint();
+    }
 }
 
 void EqContent::resized()
@@ -244,6 +262,18 @@ ZandersEqEditor::ZandersEqEditor (ZandersEqAudioProcessor& p)
 
     const int w = juce::jlimit (minW, maxW, proc.getEditorWidth());
     setSize (w, juce::roundToInt (w * (double) designH / designW));
+
+    // GPU rendering for real hosts. Skipped when ZEQ_DISABLE_GL is set, which the
+    // headless CI (pluginval under xvfb, software-GL only) uses so editor open/close
+    // validation never depends on a GL context being creatable.
+    if (juce::SystemStats::getEnvironmentVariable ("ZEQ_DISABLE_GL", {}).isEmpty())
+        openGLContext.attachTo (*this);
+}
+
+ZandersEqEditor::~ZandersEqEditor()
+{
+    // Detach before the component tree is torn down (must precede member destruction).
+    openGLContext.detach();
 }
 
 void ZandersEqEditor::paint (juce::Graphics& g)

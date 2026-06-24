@@ -90,6 +90,7 @@ target_link_libraries(ZandersEQ PRIVATE
     juce::juce_audio_processors
     juce::juce_dsp
     juce::juce_gui_extra
+    juce::juce_opengl
     PUBLIC
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
@@ -133,6 +134,7 @@ if(ZEQ_BUILD_TESTS)
         juce::juce_audio_processors
         juce::juce_dsp
         juce::juce_gui_extra
+        juce::juce_opengl
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
 

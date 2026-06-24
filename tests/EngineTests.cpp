@@ -63,6 +63,7 @@ namespace
             setP (p, ids::dynRange (i),  0.0f);
             setP (p, ids::dynAttack (i), 10.0f);
             setP (p, ids::dynRelease (i),150.0f);
+            setP (p, ids::dynDir (i),    0.0f);     // Over (react above threshold)
         }
         setP (p, ids::output,      0.0f);
         setP (p, ids::mode,        0.0f);
@@ -384,6 +385,33 @@ int main()
         check (quiet > -1.5,             "dynamic band is flat below threshold", quiet);
         check (loud  < -6.0,             "dynamic band ducks when driven loud", loud);
         check (quiet - loud > 6.0,       "loud drive ducks >6 dB below the quiet case", quiet - loud);
+    }
+
+    // --- 7b. Dynamic EQ "Under" direction lifts quiet material -------------
+    // Mirror of #7 but with direction = Under and a positive range: the band now
+    // boosts when the signal sits BELOW threshold and stays flat when it's loud.
+    {
+        auto configure = [] (ZandersEqAudioProcessor& p)
+        {
+            flatBaseline (p);
+            setP (p, ids::on (0), 1.0f);
+            setP (p, ids::type (0), (float) (int) FilterType::bell);
+            setP (p, ids::freq (0), 1000.0f);
+            setP (p, ids::gain (0), 0.0f);
+            setP (p, ids::q (0), 1.0f);
+            setP (p, ids::dynOn (0), 1.0f);
+            setP (p, ids::dynDir (0), 1.0f);        // Under
+            setP (p, ids::dynThresh (0), -30.0f);
+            setP (p, ids::dynRange (0), 12.0f);     // boost when quiet
+            setP (p, ids::dynAttack (0), 5.0f);
+            setP (p, ids::dynRelease (0), 50.0f);
+        };
+        double loud = 0.0, quiet = 0.0;
+        { ZandersEqAudioProcessor p; configure (p); p.prepareToPlay (sr, blockSize); loud  = runSineGainDb (p, 1000.0, 0.5); }
+        { ZandersEqAudioProcessor p; configure (p); p.prepareToPlay (sr, blockSize); quiet = runSineGainDb (p, 1000.0, 0.01); }
+        check (std::abs (loud) < 1.5,    "under: loud signal (above threshold) stays flat", loud);
+        check (quiet > 3.0,              "under: quiet signal (below threshold) is lifted", quiet);
+        check (quiet - loud > 3.0,       "under: quiet lifted more than loud", quiet - loud);
     }
 
     // --- 8. Mid/Side routing is isolated -----------------------------------

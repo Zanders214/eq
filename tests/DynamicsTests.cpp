@@ -41,6 +41,14 @@ int main()
     check (dynamicGainDb (0.0, -24.0, -6.0, 8.0) == -6.0, "well above -> clamps at range");
     check (dynamicGainDb (-16.0, -24.0, 6.0, 8.0) == 6.0, "positive range boosts");
 
+    // --- 1b. Under direction: acts below the threshold instead of above -----
+    check (dynamicGainDb (-10.0, -24.0, 6.0, kDynKnee, DynDirection::under) == 0.0, "under: above threshold -> 0");
+    check (dynamicGainDb (-24.0, -24.0, 6.0, kDynKnee, DynDirection::under) == 0.0, "under: at threshold -> 0");
+    check (approx (dynamicGainDb (-28.0, -24.0, 6.0, 8.0, DynDirection::under), 3.0), "under: half knee below -> half range");
+    check (approx (dynamicGainDb (-32.0, -24.0, 6.0, 8.0, DynDirection::under), 6.0), "under: full knee below -> full range");
+    check (dynamicGainDb (-50.0, -24.0, 6.0, 8.0, DynDirection::under) == 6.0, "under: well below -> clamps at range");
+    check (dynamicGainDb (-32.0, -24.0, -6.0, 8.0, DynDirection::under) == -6.0, "under: negative range cuts quiet");
+
     // --- 2. detector frequency selectivity ---------------------------------
     {
         BandDsp inBand;  inBand.updateDetector (1000.0, 1.0, 5.0, 100.0, sr);

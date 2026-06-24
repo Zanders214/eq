@@ -198,10 +198,12 @@ BandEditorRail::Layout BandEditorRail::computeLayout() const
     L.qBlock    = top.removeFromTop (42); top.removeFromTop (8);
     L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
 
-    // The DYN tab reuses the freq..slope span: an enable toggle + 4 sliders.
+    // The DYN tab reuses the freq..slope span: an enable toggle, an Over/Under
+    // direction row, then 4 sliders.
     {
         auto dynArea = L.freqBlock.getUnion (L.slopeRow);
-        L.dynEnable = dynArea.removeFromTop (30); dynArea.removeFromTop (10);
+        L.dynEnable = dynArea.removeFromTop (30); dynArea.removeFromTop (8);
+        L.dynDir    = dynArea.removeFromTop (20); dynArea.removeFromTop (10);
         const int h = (dynArea.getHeight() - 3 * 8) / 4;
         L.dynS0 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
         L.dynS1 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
@@ -396,6 +398,19 @@ void BandEditorRail::paintSliderSection (juce::Graphics& g, const Layout& L, int
     const float live = proc.getDynGainDb (s);
 
     drawToggle (g, L.dynEnable.toFloat(), dynOn, dynOn ? "DYNAMICS ON" : "DYNAMICS OFF");
+
+    // Over/Under detection direction: label on the left, two chips on the right.
+    const int dynDir = (int) apvts.getRawParameterValue (ids::dynDir (s))->load();
+    {
+        auto row = L.dynDir;
+        auto labelArea = row.removeFromLeft (row.getWidth() / 2);
+        g.setColour (dynOn ? textLabel : textLabel.withAlpha (0.5f));
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.16f));
+        g.drawText ("REACT", labelArea, juce::Justification::centredLeft);
+        drawChip (g, segment (row, 0, 2, 6.0f), dynDir == 0, "OVER",  9.0f, 0.04f);
+        drawChip (g, segment (row, 1, 2, 6.0f), dynDir == 1, "UNDER", 9.0f, 0.04f);
+    }
+
     drawSliderHead (g, L.dynS0, "THRESHOLD", juce::String (thr, 1) + " dB", ! dynOn);
     drawSliderHead (g, L.dynS1, "RANGE",
                     (rng >= 0 ? "+" : "") + juce::String (rng, 1) + " dB"
@@ -471,12 +486,27 @@ bool BandEditorRail::handleSubRegionClick (const Layout& L, juce::Point<float> p
 {
     if (showDyn)
     {
-        if (! sitsOnZeroLine (selectedType()) && L.dynEnable.toFloat().contains (p))
+        if (sitsOnZeroLine (selectedType()))
+            return false;
+
+        if (L.dynEnable.toFloat().contains (p))
         {
             setBool (ids::dynOn (s), ! (apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f));
             refresh();
             return true;
         }
+
+        // Over/Under direction chips (right half of the dynDir row).
+        auto dirRow = L.dynDir;
+        dirRow.removeFromLeft (dirRow.getWidth() / 2);
+        for (int i = 0; i < 2; ++i)
+            if (segment (dirRow, i, 2, 6.0f).contains (p))
+            {
+                setChoice (ids::dynDir (s), i);
+                repaint();
+                return true;
+            }
+
         return false;
     }
 

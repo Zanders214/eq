@@ -16,7 +16,7 @@ band's *input* to avoid self-feedback).
   (`dsp/Biquad.h`), wired into `processEq`. Unit-tested in `tests/DynamicsTests.cpp`.
 - **UI**: an EQ | DYN tab in the rail (threshold/range/attack/release + enable); the curve
   animates with the live gain and the node carries a draggable dynamic-range handle.
-- *Follow-ups*: Over/Under (below-threshold) direction; auto-threshold; external/sidechain
+- *Follow-ups*: ✅ Over/Under (below-threshold) direction; auto-threshold; external/sidechain
   detector; threshold-on-graph drag.
 
 ## 2. Per-band channel mode ✅ (implemented — domain-master model)

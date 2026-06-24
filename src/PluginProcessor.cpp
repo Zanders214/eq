@@ -45,6 +45,7 @@ ZandersEqAudioProcessor::ZandersEqAudioProcessor()
         bandParams[(size_t) i].dynRange  = apvts.getRawParameterValue (ids::dynRange (i));
         bandParams[(size_t) i].dynAttack = apvts.getRawParameterValue (ids::dynAttack (i));
         bandParams[(size_t) i].dynRelease = apvts.getRawParameterValue (ids::dynRelease (i));
+        bandParams[(size_t) i].dynDir   = apvts.getRawParameterValue (ids::dynDir (i));
     }
     outputParam   = apvts.getRawParameterValue (ids::output);
     modeParam     = apvts.getRawParameterValue (ids::mode);
@@ -326,7 +327,10 @@ void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool
         if (dynActive)
         {
             const double levelDb = juce::Decibels::gainToDecibels (bands[(size_t) i].env + 1.0e-9f);
-            const double offs = dynamicGainDb (levelDb, (double) bandParams[(size_t) i].dynThresh->load(), (double) rng);
+            const auto dir = bandParams[(size_t) i].dynDir->load() > 0.5f ? DynDirection::under
+                                                                          : DynDirection::over;
+            const double offs = dynamicGainDb (levelDb, (double) bandParams[(size_t) i].dynThresh->load(),
+                                               (double) rng, kDynKnee, dir);
             effGain = g + (float) offs;
             bands[(size_t) i].dynGainDb = (float) offs;
             bands[(size_t) i].updateDetector (f, juce::jlimit (0.5f, 4.0f, qq),

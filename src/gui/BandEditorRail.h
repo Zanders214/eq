@@ -57,6 +57,7 @@ private:
         juce::Rectangle<int> captureBtn;
         juce::Rectangle<int> matchBtn;
         juce::Rectangle<int> dynEnable;
+        juce::Rectangle<int> dynDir;
         juce::Rectangle<int> dynS0;
         juce::Rectangle<int> dynS1;
         juce::Rectangle<int> dynS2;

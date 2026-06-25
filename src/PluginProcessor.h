@@ -181,6 +181,13 @@ private:
     bool   lastHq         = false;
     bool   lastMs         = false;                  // global-domain change detector
     std::array<int, numBands> lastChannel { };      // per-band lane change detector
+    // Coefficient-cache change detectors: a band's biquad is recomputed only when one of its
+    // inputs actually moves (see updateBandCoeffsForBlock). -1 sentinels force the first block
+    // to recompute; prepareToPlay primes them.
+    std::array<int,  numBands> lastType      { };
+    std::array<int,  numBands> lastSlope     { };
+    std::array<bool, numBands> lastDynActive { };
+    std::array<bool, numBands> lastMoving    { };   // recompute once more after a ramp settles (exact target)
     std::atomic<float> autoGainDb { 0.0f };
     std::array<std::atomic<float>, numBands> dynGainDisplay { };
 

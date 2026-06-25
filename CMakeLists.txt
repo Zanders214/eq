@@ -17,6 +17,8 @@ endif()
 option(ZEQ_BUILD_STANDALONE "Build the Standalone target (handy for testing)" ON)
 option(ZEQ_BUILD_TESTS "Build the MatchFit unit-test executable" OFF)
 option(ZEQ_COVERAGE "Instrument the test targets for gcov coverage (CI/SonarCloud only)" OFF)
+option(ZEQ_RT_SANITIZE "Build ZandersEQRtCheck with clang RealtimeSanitizer (needs clang>=20)" OFF)
+option(ZEQ_BUILD_BENCH "Build the ZandersEQBench micro-benchmark (fetches nanobench)" OFF)
 
 # --- JUCE -------------------------------------------------------------------
 include(FetchContent)
@@ -153,4 +155,85 @@ if(ZEQ_BUILD_TESTS)
     add_test(NAME ChannelRoutingTests COMMAND ZandersEQRoutingTests)
     add_test(NAME DynamicsTests COMMAND ZandersEQDynamicsTests)
     add_test(NAME EngineTests COMMAND ZandersEQEngineTests)
+endif()
+
+# ----------------------------------------------------------------------------
+# Performance & real-time-safety harnesses (opt-in, CI only). Both mirror the
+# ZandersEQEngineTests target above: they compile the engine + GUI sources and link the
+# JUCE modules directly (NOT the ZandersEQ plugin target, which would double-consume the
+# modules) and deliberately omit juce_recommended_lto_flags. The GUI sources + ZandersEQData
+# are pulled in only because the compiled createEditor() references ZandersEqEditor — no
+# window is ever opened by these headless drivers, so they run under Xvfb with no display.
+# ----------------------------------------------------------------------------
+set(ZEQ_ENGINE_SOURCES
+    src/PluginProcessor.cpp
+    src/PluginEditor.cpp
+    src/gui/NeonLookAndFeel.cpp
+    src/gui/EqGraphComponent.cpp
+    src/gui/BandStrip.cpp
+    src/gui/PresetBar.cpp
+    src/gui/BandEditorRail.cpp)
+
+# --- RealtimeSanitizer driver (clang >= 20 only) ----------------------------
+# Annotated audio-thread DSP (processEq and below) is compiled with [[clang::nonblocking]]
+# via the ZEQ_RT_NONBLOCKING define; -fsanitize=realtime then flags any malloc/lock/syscall
+# inside that subtree at runtime. clang-only: MSVC/gcc have no RealtimeSanitizer.
+if(ZEQ_RT_SANITIZE)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "ZEQ_RT_SANITIZE requires clang (>= 20) for -fsanitize=realtime")
+    endif()
+
+    add_executable(ZandersEQRtCheck tests/rt_check.cpp ${ZEQ_ENGINE_SOURCES})
+    set_target_properties(ZandersEQRtCheck PROPERTIES EXCLUDE_FROM_ALL TRUE)
+    target_include_directories(ZandersEQRtCheck PRIVATE src)
+    target_compile_definitions(ZandersEQRtCheck PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_REPORT_APP_USAGE=0
+        "ZEQ_RT_NONBLOCKING=[[clang::nonblocking]]")   # CMake passes the brackets through fine inside quotes
+    target_compile_options(ZandersEQRtCheck PRIVATE -fsanitize=realtime)
+    target_link_options   (ZandersEQRtCheck PRIVATE -fsanitize=realtime)
+    target_link_libraries(ZandersEQRtCheck PRIVATE
+        ZandersEQData
+        juce::juce_audio_utils
+        juce::juce_audio_processors
+        juce::juce_dsp
+        juce::juce_gui_extra
+        juce::juce_opengl
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+endif()
+
+# --- nanobench performance micro-benchmark ----------------------------------
+# Header-only use: we define ANKERL_NANOBENCH_IMPLEMENT in perf_bench.cpp and add the include
+# dir; we do NOT link a nanobench library target (that would duplicate the implementation symbols).
+if(ZEQ_BUILD_BENCH)
+    FetchContent_Declare(nanobench
+        GIT_REPOSITORY https://github.com/martinus/nanobench.git
+        GIT_TAG        v4.3.11
+        GIT_SHALLOW    TRUE)
+    FetchContent_MakeAvailable(nanobench)
+
+    add_executable(ZandersEQBench tests/perf_bench.cpp ${ZEQ_ENGINE_SOURCES})
+    set_target_properties(ZandersEQBench PROPERTIES EXCLUDE_FROM_ALL TRUE)
+    target_include_directories(ZandersEQBench PRIVATE
+        src
+        ${nanobench_SOURCE_DIR}/src/include)
+    target_compile_definitions(ZandersEQBench PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0
+        JUCE_REPORT_APP_USAGE=0)
+    target_link_libraries(ZandersEQBench PRIVATE
+        ZandersEQData
+        juce::juce_audio_utils
+        juce::juce_audio_processors
+        juce::juce_dsp
+        juce::juce_gui_extra
+        juce::juce_opengl
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
 endif()

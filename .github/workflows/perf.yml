@@ -1,0 +1,76 @@
+name: Performance Benchmark
+
+# nanobench micro-benchmark of the real processBlock, published to a github-action-benchmark
+# trend dashboard on the gh-pages branch. PRs compare against the baseline and comment; merges
+# to main/dev append a point to the chart at https://zanders214.github.io/eq/dev/bench/.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write          # push trend data to gh-pages on main/dev
+  pull-requests: write     # comment the per-PR comparison
+
+jobs:
+  benchmark:
+    name: nanobench
+    runs-on: ubuntu-24.04   # single runner only — numbers across OS/runner types aren't comparable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build xvfb \
+            libasound2-dev libjack-jackd2-dev \
+            libxinerama-dev libxrandr-dev libxcursor-dev libxcomposite-dev libxext-dev \
+            libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libcurl4-openssl-dev
+
+      - name: Cache JUCE + nanobench source
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-src-bench-${{ hashFiles('CMakeLists.txt') }}
+
+      - uses: lukka/get-cmake@latest
+
+      - name: Configure
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DZEQ_BUILD_BENCH=ON
+          -DZEQ_BUILD_STANDALONE=OFF
+
+      - name: Build ZandersEQBench
+        run: cmake --build build --target ZandersEQBench --parallel "$(nproc)"
+
+      - name: Run benchmark
+        run: |
+          BIN=build/ZandersEQBench
+          [ -x "$BIN" ] || BIN=$(find build -type f -name ZandersEQBench | head -1)
+          xvfb-run -a "$BIN" bench_result.json
+          cat bench_result.json
+
+      - name: Store / compare benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: ZandersEQ DSP
+          tool: customSmallerIsBetter
+          output-file-path: bench_result.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
+          # Publish trend data only from the integration branches; PRs just compare + comment.
+          auto-push: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' }}
+          comment-on-alert: true
+          summary-always: true
+          alert-threshold: '150%'          # generous, to absorb shared-runner noise
+          # Seed the baseline first. Flip to `true` in a one-line follow-up once a few dev
+          # points exist, so the gate doesn't trip against a single noisy first data point.
+          fail-on-alert: false

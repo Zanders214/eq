@@ -6,6 +6,7 @@
 #include "Parameters.h"
 #include "dsp/Biquad.h"
 #include "dsp/MatchFit.h"
+#include "dsp/RtSafety.h"
 
 namespace zeq
 {
@@ -139,7 +140,7 @@ private:
         std::atomic<float>* dynDir   = nullptr;
     };
 
-    void processEq (float* const* channels, int numChannels, int numSamples, double sr) noexcept;
+    void processEq (float* const* channels, int numChannels, int numSamples, double sr) noexcept ZEQ_RT_NONBLOCKING;
 
     // processBlock helpers (extracted to keep the audio callback readable).
     void captureMatchTaps (juce::AudioBuffer<float>& buffer,
@@ -150,12 +151,12 @@ private:
     // processEq helpers.
     void updateBandCoeffsForBlock (int len, double sr, bool anySolo,
                                    std::array<int, numBands>& lane,
-                                   std::array<bool, numBands>& dyn) noexcept;
+                                   std::array<bool, numBands>& dyn) noexcept ZEQ_RT_NONBLOCKING;
     void applyBandsStereo (float* const* channels, int pos, int len, bool ms,
                            const std::array<int, numBands>& lane,
-                           const std::array<bool, numBands>& dyn) noexcept;
+                           const std::array<bool, numBands>& dyn) noexcept ZEQ_RT_NONBLOCKING;
     void applyBandsMono (float* const* channels, int pos, int len,
-                         const std::array<bool, numBands>& dyn) noexcept;
+                         const std::array<bool, numBands>& dyn) noexcept ZEQ_RT_NONBLOCKING;
 
     juce::AudioProcessorValueTreeState apvts;
     std::array<BandParams, numBands> bandParams;

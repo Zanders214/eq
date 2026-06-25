@@ -254,7 +254,7 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 }
 
 void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels,
-                                         int numSamples, double sr) noexcept
+                                         int numSamples, double sr) noexcept ZEQ_RT_NONBLOCKING
 {
     const bool stereo = numChannels >= 2;
     const bool ms     = stereo && modeParam->load() > 0.5f;
@@ -293,7 +293,7 @@ void ZandersEqAudioProcessor::processEq (float* const* channels, int numChannels
 // Advance the smoothers and refresh each band's coefficients/dynamics for one control sub-block.
 void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool anySolo,
                                                         std::array<int, numBands>& lane,
-                                                        std::array<bool, numBands>& dyn) noexcept
+                                                        std::array<bool, numBands>& dyn) noexcept ZEQ_RT_NONBLOCKING
 {
     for (int i = 0; i < numBands; ++i)
     {
@@ -353,7 +353,7 @@ void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool
 // Stereo (or M/S) path: filter the canonical lane pair through every active band.
 void ZandersEqAudioProcessor::applyBandsStereo (float* const* channels, int pos, int len, bool ms,
                                                 const std::array<int, numBands>& lane,
-                                                const std::array<bool, numBands>& dyn) noexcept
+                                                const std::array<bool, numBands>& dyn) noexcept ZEQ_RT_NONBLOCKING
 {
     float* L = channels[0];
     float* R = channels[1];
@@ -379,7 +379,7 @@ void ZandersEqAudioProcessor::applyBandsStereo (float* const* channels, int pos,
 
 // Mono path: lane-agnostic, filter the single channel through state set 0.
 void ZandersEqAudioProcessor::applyBandsMono (float* const* channels, int pos, int len,
-                                              const std::array<bool, numBands>& dyn) noexcept
+                                              const std::array<bool, numBands>& dyn) noexcept ZEQ_RT_NONBLOCKING
 {
     float* M = channels[0];
     for (int s = pos; s < pos + len; ++s)

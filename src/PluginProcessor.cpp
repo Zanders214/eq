@@ -78,6 +78,10 @@ void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
         bands[(size_t) i].reset();
         bands[(size_t) i].active = false;
         lastChannel[(size_t) i] = -1;
+        lastType[(size_t) i]    = -1;   // sentinels: force a coeff recompute on the first block
+        lastSlope[(size_t) i]   = -1;
+        lastDynActive[(size_t) i] = false;
+        lastMoving[(size_t) i]    = false;
         dynGainDisplay[(size_t) i].store (0.0f);
     }
     lastMs = false;
@@ -297,6 +301,12 @@ void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool
 {
     for (int i = 0; i < numBands; ++i)
     {
+        // Is any coeff-affecting smoother still ramping? Checked before advancing them, so a
+        // settled band (steady state) can skip the trig/pow in makeCoeffs below.
+        const bool paramsMoving = freqSm[(size_t) i].isSmoothing()
+                               || gainSm[(size_t) i].isSmoothing()
+                               || qSm[(size_t) i].isSmoothing();
+
         const float f = freqSm[(size_t) i].getNextValue();
         const float g = gainSm[(size_t) i].getNextValue();
         const float qq = qSm[(size_t) i].getNextValue();
@@ -311,8 +321,9 @@ void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool
         const int  chMode = (int) bandParams[(size_t) i].channel->load();
         lane[(size_t) i]  = chMode;
 
-        if (const bool laneChanged = chMode != lastChannel[(size_t) i];
-            active != bands[(size_t) i].active || laneChanged)
+        const bool laneChanged   = chMode != lastChannel[(size_t) i];
+        const bool activeChanged = active != bands[(size_t) i].active;
+        if (activeChanged || laneChanged)
         {
             if (! active || laneChanged)
                 bands[(size_t) i].reset();
@@ -345,7 +356,25 @@ void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool
             dynGainDisplay[(size_t) i].store (0.0f);
         }
 
-        if (active)
+        // Coefficient cache: makeCoeffs depends only on (type, f, effGain, qq, slope). In steady
+        // state those are constant block-to-block, so the result is identical and the trig/pow is
+        // pure waste — recompute only when an input moved. Dynamic bands always recompute because
+        // effGain tracks the detector envelope every block; the block a band leaves the dynamic
+        // path (lastDynActive) must also recompute to drop the offset.
+        const bool topologyChanged = (int) type != lastType[(size_t) i]
+                                   || slope     != lastSlope[(size_t) i];
+        // `lastMoving` forces one extra recompute the block after a ramp settles, so the final
+        // coeffs use the exact target (getNextValue() == target) — bit-for-bit the old behaviour.
+        const bool needsRecompute  = active
+                                  && (paramsMoving || lastMoving[(size_t) i]
+                                      || topologyChanged || activeChanged || laneChanged
+                                      || dynActive || lastDynActive[(size_t) i]);
+        lastType[(size_t) i]      = (int) type;
+        lastSlope[(size_t) i]     = slope;
+        lastDynActive[(size_t) i] = dynActive;
+        lastMoving[(size_t) i]    = paramsMoving;
+
+        if (needsRecompute)
             bands[(size_t) i].updateCoeffs (type, f, effGain, qq, slope, sr);
     }
 }

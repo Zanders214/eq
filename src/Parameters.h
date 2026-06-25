@@ -32,6 +32,7 @@ namespace ids
     inline juce::String dynRange  (int i)           { return band (i) + "dynrange"; }
     inline juce::String dynAttack (int i)           { return band (i) + "dynattack"; }
     inline juce::String dynRelease(int i)           { return band (i) + "dynrelease"; }
+    inline juce::String dynDir    (int i)           { return band (i) + "dyndir"; }
 }
 
 // Parameter ranges (shared by the engine and the UI mappings).
@@ -173,6 +174,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             ParameterID { ids::dynRelease (i), 1 }, g + "Dyn Release",
             makeLogRange (10.0f, 2000.0f), 150.0f,
             AudioParameterFloatAttributes().withLabel ("ms")));
+        // Detection direction: Over = react above threshold (downward), Under = below (upward).
+        layout.add (std::make_unique<AudioParameterChoice> (
+            ParameterID { ids::dynDir (i), 1 }, g + "Dyn Direction",
+            StringArray { "Over", "Under" }, 0));
     }
 
     layout.add (std::make_unique<AudioParameterFloat> (

@@ -172,12 +172,22 @@ inline BiquadCoeffs makeBandpass (double freq, double q, double sampleRate) noex
     return { b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv };
 }
 
-// Dynamic-EQ gain offset: 0 at/below threshold, easing to `rangeDb` over a soft
-// knee above it. Signed range (negative = cut when loud, positive = boost).
+// Dynamic-EQ detection direction: react when the band level is OVER the threshold
+// (downward — duck/compress loud material) or UNDER it (upward — lift quiet material).
+enum class DynDirection { over, under };
+
+inline constexpr double kDynKnee = 8.0;   // soft-knee width (dB) for the dynamic offset
+
+// Dynamic-EQ gain offset: 0 on the inactive side of the threshold, easing to
+// `rangeDb` over a soft knee on the active side. Signed range (negative = cut,
+// positive = boost). `dir` selects whether "active" means above or below threshold.
 inline double dynamicGainDb (double levelDb, double thresholdDb, double rangeDb,
-                             double kneeDb = 8.0) noexcept
+                             double kneeDb = kDynKnee,
+                             DynDirection dir = DynDirection::over) noexcept
 {
-    const double amount = std::clamp ((levelDb - thresholdDb) / std::max (0.5, kneeDb), 0.0, 1.0);
+    const double delta = (dir == DynDirection::under) ? (thresholdDb - levelDb)
+                                                      : (levelDb - thresholdDb);
+    const double amount = std::clamp (delta / std::max (0.5, kneeDb), 0.0, 1.0);
     return rangeDb * amount;
 }
 

@@ -136,6 +136,7 @@ private:
         std::atomic<float>* dynRange  = nullptr;
         std::atomic<float>* dynAttack = nullptr;
         std::atomic<float>* dynRelease = nullptr;
+        std::atomic<float>* dynDir   = nullptr;
     };
 
     void processEq (float* const* channels, int numChannels, int numSamples, double sr) noexcept;

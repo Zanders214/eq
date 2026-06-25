@@ -4,6 +4,8 @@
 #include <cmath>
 #include <algorithm>
 
+#include "RtSafety.h"
+
 /*  EqMath — the single source of truth for the EQ's biquad math.
 
     This is a direct C++ port of the RBJ "Audio EQ Cookbook" coefficient math in
@@ -54,7 +56,7 @@ struct BiquadCoeffs
     double a2 = 0.0;
 
     // |H(e^jw)| at frequency f for a given sample rate (linear magnitude).
-    double magnitude (double f, double sampleRate) const noexcept
+    double magnitude (double f, double sampleRate) const noexcept ZEQ_RT_NONBLOCKING
     {
         const double w   = 2.0 * kPi * f / sampleRate;
         const double cw1 = std::cos (w);
@@ -74,7 +76,7 @@ struct BiquadCoeffs
 };
 
 // RBJ cookbook coefficients for one band, normalised to a0 = 1.
-inline BiquadCoeffs makeCoeffs (FilterType type, double freq, double gainDb, double q, double sampleRate) noexcept
+inline BiquadCoeffs makeCoeffs (FilterType type, double freq, double gainDb, double q, double sampleRate) noexcept ZEQ_RT_NONBLOCKING
 {
     const double w0    = 2.0 * kPi * freq / sampleRate;
     const double cw    = std::cos (w0);
@@ -155,7 +157,7 @@ inline int stagesForSlope (FilterType type, int slopeDbPerOct) noexcept
 
 // RBJ band-pass (constant 0 dB peak gain), normalised to a0 = 1 — the per-band
 // dynamic-EQ detector that isolates the band's own frequency region.
-inline BiquadCoeffs makeBandpass (double freq, double q, double sampleRate) noexcept
+inline BiquadCoeffs makeBandpass (double freq, double q, double sampleRate) noexcept ZEQ_RT_NONBLOCKING
 {
     const double w0    = 2.0 * kPi * freq / sampleRate;
     const double cw    = std::cos (w0);
@@ -183,7 +185,7 @@ inline constexpr double kDynKnee = 8.0;   // soft-knee width (dB) for the dynami
 // positive = boost). `dir` selects whether "active" means above or below threshold.
 inline double dynamicGainDb (double levelDb, double thresholdDb, double rangeDb,
                              double kneeDb = kDynKnee,
-                             DynDirection dir = DynDirection::over) noexcept
+                             DynDirection dir = DynDirection::over) noexcept ZEQ_RT_NONBLOCKING
 {
     const double delta = (dir == DynDirection::under) ? (thresholdDb - levelDb)
                                                       : (levelDb - thresholdDb);
@@ -195,7 +197,7 @@ inline double dynamicGainDb (double levelDb, double thresholdDb, double rangeDb,
 // N identical cascaded biquads multiply the magnitude, i.e. add in dB — so the
 // displayed curve equals the audio path exactly.
 inline double bandMagnitudeDb (FilterType type, double freq, double gainDb, double q, // NOSONAR(cpp:S107): callers in tests/ are out of editable scope
-                               int slopeDbPerOct, bool on, double f, double sampleRate) noexcept
+                               int slopeDbPerOct, bool on, double f, double sampleRate) noexcept ZEQ_RT_NONBLOCKING
 {
     if (! on)
         return 0.0;

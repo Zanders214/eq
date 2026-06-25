@@ -1,0 +1,9 @@
+# RealtimeSanitizer suppressions for ZandersEQRtCheck.
+#
+# Keep this tiny. Each line hides ONE known, unavoidable third-party call from the gate;
+# anything not listed stays a hard failure. The EQ's audio-thread DSP (processEq and below)
+# is pure stack math over pre-allocated state, so this file is expected to stay empty.
+#
+# Format (see https://clang.llvm.org/docs/RealtimeSanitizer.html):
+#   call-stack-contains:<demangled-pattern>
+#   function-name-matches:<pattern>

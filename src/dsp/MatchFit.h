@@ -152,10 +152,15 @@ namespace matchdetail
         return (float) std::clamp (q, 0.5, 6.0);
     }
 
-    // Solve A x = b (n<=6) via Gaussian elimination with partial pivoting.
-    inline bool solveLinear (std::array<std::array<double, 6>, 6>& A,
-                             std::array<double, 6>& b,
-                             std::array<double, 6>& x, int n)
+    // EQ-match band budget. The gain-refinement solver below is a fixed kMatchMaxBands-square
+    // linear system, so the matcher never places more than this many bands regardless of the
+    // plugin pool size (numBands). Size the solver arrays from this constant so they stay in sync.
+    inline constexpr int kMatchMaxBands = 6;
+
+    // Solve A x = b (n<=kMatchMaxBands) via Gaussian elimination with partial pivoting.
+    inline bool solveLinear (std::array<std::array<double, kMatchMaxBands>, kMatchMaxBands>& A,
+                             std::array<double, kMatchMaxBands>& b,
+                             std::array<double, kMatchMaxBands>& x, int n)
     {
         for (int i = 0; i < n; ++i)
         {
@@ -215,7 +220,7 @@ namespace matchdetail
                              const std::array<double, kMatchBins>& w, int K, double sr)
     {
         const int n = result.used;
-        std::array<std::array<double, kMatchBins>, numBands> phi {};
+        std::array<std::array<double, kMatchBins>, kMatchMaxBands> phi {};
         for (int i = 0; i < n; ++i)
         {
             const auto& b = result.bands[(size_t) i];
@@ -223,9 +228,9 @@ namespace matchdetail
                 phi[(size_t) i][(size_t) k] = bandMagnitudeDb (b.type, b.freq, 1.0, b.q, b.slope, true,
                                                                matchBinFreq (k, K), sr);
         }
-        std::array<std::array<double, 6>, 6> A {};
-        std::array<double, 6> bb {};
-        std::array<double, 6> x {};
+        std::array<std::array<double, kMatchMaxBands>, kMatchMaxBands> A {};
+        std::array<double, kMatchMaxBands> bb {};
+        std::array<double, kMatchMaxBands> x {};
         for (int i = 0; i < n; ++i)
         {
             for (int j = 0; j < n; ++j)
@@ -263,7 +268,8 @@ inline MatchResult fitMatch (const float* refPower, const float* srcPower, int K
 
     // Greedy placement.
     const double gateDb = 0.75;
-    for (int n = 0; n < numBands; ++n)
+    // Cap at the match solver's fixed size — the matcher fills only a subset of the numBands pool.
+    for (int n = 0; n < std::min (numBands, kMatchMaxBands); ++n)
     {
         const int peak = findPeakBin (residual, w, K);
         if (peak < 0 || std::abs (residual[(size_t) peak]) < gateDb)

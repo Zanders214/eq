@@ -33,7 +33,7 @@ inline constexpr int numFilterTypes = 6;
 
 // Fixed pool of EQ bands. Lives here (the pure header) so non-JUCE code such as
 // MatchFit can share it. Bump to expand the EQ; strip/nodes/params follow.
-inline constexpr int numBands = 6;
+inline constexpr int numBands = 24;
 
 inline bool isCut (FilterType t) noexcept
 {

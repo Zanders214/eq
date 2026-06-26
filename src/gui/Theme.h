@@ -103,6 +103,9 @@ inline juce::String typeLabel (FilterType t)
         case FilterType::notch:     return "NOTCH";
         case FilterType::highShelf: return "HI SHELF";
         case FilterType::lowPass:   return "LO-PASS";
+        case FilterType::tiltShelf: return "TILT";
+        case FilterType::bandPass:  return "BAND-PASS";
+        case FilterType::allPass:   return "ALL-PASS";
     }
     return "BELL";
 }

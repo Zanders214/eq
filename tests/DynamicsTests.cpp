@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <limits>
 
 using namespace zeq;
 
@@ -75,6 +76,21 @@ int main()
         const float peak = runDetector (band, 1000.0, 0.5, 4800, sr);
         for (int i = 0; i < 4800; ++i) band.pushDetector (0.0f);          // silence
         check (band.env < peak * 0.2f, "envelope releases toward silence", band.env);
+    }
+
+    // --- 5. non-finite guard: a diverged cascade never escapes as inf/NaN ----
+    // A deep (up to 8-stage) high-Q cut can overflow float to inf in practice; processSample
+    // must flush the channel's cascade and recover at silence so the plugin never emits a
+    // non-finite sample (which crashes hosts / pluginval's fuzzer).
+    {
+        BandDsp band;
+        band.active = true;
+        band.activeStages = 1;
+        band.stages[0][0].z1 = std::numeric_limits<float>::infinity();   // poison the state
+        const float y = band.processSample (0, 0.25f);
+        check (std::isfinite (y) && y == 0.0f, "non-finite cascade output is flushed to silence", y);
+        const float y2 = band.processSample (0, 0.25f);                  // state was reset
+        check (std::isfinite (y2), "band recovers to finite output after a flush", y2);
     }
 
     std::printf ("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED",

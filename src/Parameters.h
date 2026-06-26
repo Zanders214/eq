@@ -53,24 +53,41 @@ inline constexpr float outMax  = 24.0f;
 
 inline juce::StringArray filterTypeChoices()
 {
-    return { "High Pass", "Low Shelf", "Bell", "Notch", "High Shelf", "Low Pass" };
+    // Append-only (CONTRACT C2): indices 0..5 are frozen for preset/session back-compat and
+    // each index must equal its FilterType enum value. 6/7/8 = Tilt Shelf / Band-Pass / All-Pass.
+    return { "High Pass", "Low Shelf", "Bell", "Notch", "High Shelf", "Low Pass",
+             "Tilt Shelf", "Band-Pass", "All-Pass" };
 }
 
 inline juce::StringArray slopeChoices()
 {
-    return { "12 dB/oct", "24 dB/oct", "48 dB/oct" };
+    // Append-only (C2): 0..2 frozen; 3/4/5 add the steeper cuts + Brickwall. (The deep
+    // cascade is kept finite by BandDsp::processSample's non-finite guard in Biquad.h.)
+    return { "12 dB/oct", "24 dB/oct", "48 dB/oct",
+             "72 dB/oct", "96 dB/oct", "Brickwall" };
 }
 
 inline int slopeIndexToValue (int idx)
 {
-    switch (idx) { case 0: return 12; case 1: return 24; default: return 48; }
+    switch (idx)
+    {
+        case 0:  return 12;
+        case 1:  return 24;
+        case 2:  return 48;
+        case 3:  return 72;
+        case 4:  return 96;
+        default: return kBrickwallSlope;   // 5 = Brickwall (sentinel from dsp/EqMath.h)
+    }
 }
 
 inline int slopeValueToIndex (int v)
 {
     if (v <= 12) return 0;
     if (v <= 24) return 1;
-    return 2;
+    if (v <= 48) return 2;
+    if (v <= 72) return 3;
+    if (v <= 96) return 4;
+    return 5;   // Brickwall (kBrickwallSlope)
 }
 
 // A log-frequency range that matches the design's f01 mapping (20 Hz .. 20 kHz).

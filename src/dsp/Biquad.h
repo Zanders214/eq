@@ -90,6 +90,16 @@ struct BandDsp
         auto& ch = stages[(size_t) channel];
         for (int s = 0; s < activeStages; ++s)
             x = ch[s].processSample (x);
+        // A steep cut is up to 8 cascaded resonant biquads; at high Q their resonances
+        // multiply and can overflow float to inf/NaN. A plugin must never emit a non-finite
+        // sample (it crashes hosts / fuzzers and poisons the rest of the chain), so flush this
+        // channel's cascade state and recover at silence the instant that happens.
+        if (! std::isfinite (x))
+        {
+            for (auto& st : ch)
+                st.reset();
+            return 0.0f;
+        }
         return x;
     }
 };

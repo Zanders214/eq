@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782499316753,
+  "lastUpdate": 1782500537502,
   "repoUrl": "https://github.com/Zanders214/eq",
   "entries": {
     "ZandersEQ DSP": [
@@ -263,6 +263,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "DSP load HQ 2x @48k/512",
             "value": 0.604,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "152227414+Zanders214@users.noreply.github.com",
+            "name": "Dennis Zanders",
+            "username": "Zanders214"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3388e91eb75d8e4d5390048fbc1ac068391830d1",
+          "message": "Merge pull request #19 from Zanders214/claude/zanderseq-layout-refactor-vkt1i1\n\nfeat(layout): Pro-Q 4 full-width reflow, neon bottom toolbar & floating band panel",
+          "timestamp": "2026-06-26T20:59:41+02:00",
+          "tree_id": "5b00767b026953e7a754bd3db02b031d6d2bda4d",
+          "url": "https://github.com/Zanders214/eq/commit/3388e91eb75d8e4d5390048fbc1ac068391830d1"
+        },
+        "date": 1782500536607,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "processBlock @48k/512",
+            "value": 30853.97,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load @48k/512",
+            "value": 0.289,
+            "unit": "%"
+          },
+          {
+            "name": "processBlock HQ 2x @48k/512",
+            "value": 64502.974,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load HQ 2x @48k/512",
+            "value": 0.605,
             "unit": "%"
           }
         ]

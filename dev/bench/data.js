@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782494818835,
+  "lastUpdate": 1782499316753,
   "repoUrl": "https://github.com/Zanders214/eq",
   "entries": {
     "ZandersEQ DSP": [
@@ -219,6 +219,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "DSP load HQ 2x @48k/512",
             "value": 0.603,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "152227414+Zanders214@users.noreply.github.com",
+            "name": "Dennis Zanders",
+            "username": "Zanders214"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f89300056a6aa02642471d04e9d1c83051718d29",
+          "message": "Merge pull request #18 from Zanders214/claude/proq4-hero-graph-d8l2i2\n\nfeat(graph): Pro-Q 4 hero display — dynamic bands, pre/post spectrum, C4 seam",
+          "timestamp": "2026-06-26T20:39:27+02:00",
+          "tree_id": "9d93b0a873dca8a273af8138243d12e3818d8854",
+          "url": "https://github.com/Zanders214/eq/commit/f89300056a6aa02642471d04e9d1c83051718d29"
+        },
+        "date": 1782499316502,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "processBlock @48k/512",
+            "value": 30874.932,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load @48k/512",
+            "value": 0.289,
+            "unit": "%"
+          },
+          {
+            "name": "processBlock HQ 2x @48k/512",
+            "value": 64447.753,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load HQ 2x @48k/512",
+            "value": 0.604,
             "unit": "%"
           }
         ]

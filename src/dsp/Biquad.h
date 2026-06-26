@@ -26,7 +26,10 @@ struct Biquad
     void reset() noexcept { z2 = 0.0f; z1 = z2; }
 };
 
-inline constexpr int maxCascade = 4; // 48 dB/oct = four cascaded biquads
+// Aliased to EqMath's kMaxCascadeStages (single source of truth): eight cascaded biquads,
+// enough for 96 dB/oct and the Brickwall sentinel. Bumped from 4 — the per-band cost of the
+// deepest slopes rises accordingly (an informed tradeoff, see the slope rework).
+inline constexpr int maxCascade = kMaxCascadeStages;
 
 // One EQ band's runtime DSP: up to `maxCascade` identical biquads in series,
 // one independent state set per audio channel. Coefficients are shared across

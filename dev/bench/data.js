@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782410031904,
+  "lastUpdate": 1782491709573,
   "repoUrl": "https://github.com/Zanders214/eq",
   "entries": {
     "ZandersEQ DSP": [
@@ -87,6 +87,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "DSP load HQ 2x @48k/512",
             "value": 0.31,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "152227414+Zanders214@users.noreply.github.com",
+            "name": "Dennis Zanders",
+            "username": "Zanders214"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f23162adaad2e19959d4d771873ba6dd3c6bd8f8",
+          "message": "Merge pull request #15 from Zanders214/claude/proq4-dsp-shapes-atv07d\n\nfeat(dsp): Pro-Q 4 filter shapes (tilt/band-pass/all-pass) + steeper slopes",
+          "timestamp": "2026-06-26T19:32:47+03:00",
+          "tree_id": "775eddf48e0783762719a9556871287aefd6cd05",
+          "url": "https://github.com/Zanders214/eq/commit/f23162adaad2e19959d4d771873ba6dd3c6bd8f8"
+        },
+        "date": 1782491709295,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "processBlock @48k/512",
+            "value": 23873.36,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load @48k/512",
+            "value": 0.224,
+            "unit": "%"
+          },
+          {
+            "name": "processBlock HQ 2x @48k/512",
+            "value": 51357.957,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load HQ 2x @48k/512",
+            "value": 0.481,
             "unit": "%"
           }
         ]

@@ -2,15 +2,28 @@
 #include "NeonLookAndFeel.h"
 #include "Theme.h"
 
-#include <array>
-
 namespace zeq
 {
 using namespace theme;
 
 namespace
 {
-    constexpr std::array<const char*, numFilterTypes> typeChipLabels { "HP", "LO", "BELL", "NTCH", "HI", "LP" };
+    // ---- panel metrics ------------------------------------------------------
+    constexpr int kPanelW   = 300; // natural width reported by getDesiredSize()
+    constexpr int kPad      = 14;
+    constexpr int kHeaderH  = 18;
+    constexpr int kTypeH    = 26;
+    constexpr int kSliderH  = 40;  // 16 label + 24 control
+    constexpr int kSlopeH   = 22;
+    constexpr int kStereoH  = 26;
+    constexpr int kDynHeadH = 30;
+    constexpr int kDynDirH  = 22;
+    constexpr int kDynSldH  = 38;
+    constexpr int kMatchLblH = 16;
+    constexpr int kMatchAmtH = 38;
+    constexpr int kMatchBtnH = 32;
+    constexpr int kGap      = 12;  // between major sections
+    constexpr int kSub      = 6;   // small in-section gap
 
     void drawChip (juce::Graphics& g, juce::Rectangle<float> r, bool active,
                    const juce::String& text, float fontH, float tracking)
@@ -45,7 +58,6 @@ namespace
             g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.0f);
         }
 
-        // square status dot
         auto inactiveDotCol = isDanger ? theme::danger.withAlpha (0.8f) : accent.withAlpha (0.8f);
         auto dotCol = active ? juce::Colours::white : inactiveDotCol;
         auto content = r.reduced (14.0f, 0.0f);
@@ -89,15 +101,6 @@ BandEditorRail::BandEditorRail (ZandersEqAudioProcessor& p)
     setupSlider (gainSlider, "warm");
     setupSlider (qSlider,    "warm");
 
-    outputDial.setSliderStyle (juce::Slider::RotaryVerticalDrag);
-    outputDial.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-    const float pi = juce::MathConstants<float>::pi;
-    outputDial.setRotaryParameters (pi * 1.25f, pi * 2.75f, true);
-    addAndMakeVisible (outputDial);
-    outputDial.onDragStart = [this] { proc.beginUndoTransaction(); };
-    outputDial.onDragEnd   = [this] { proc.commitUndoTransaction(); };
-    outAtt = std::make_unique<Attachment> (apvts, ids::output, outputDial);
-
     setupSlider (matchAmountSlider, "accent");
     matchAmtAtt = std::make_unique<Attachment> (apvts, ids::matchamount, matchAmountSlider);
 
@@ -114,6 +117,63 @@ BandEditorRail::~BandEditorRail() = default;
 FilterType BandEditorRail::selectedType() const
 {
     return static_cast<FilterType> ((int) apvts.getRawParameterValue (ids::type (selected()))->load());
+}
+
+bool BandEditorRail::selectedZeroLine() const
+{
+    const auto t = selectedType();
+    if (sitsOnZeroLine (t))
+        return true;
+    // Defensive forward-compat: until Branch 5 classifies the new shapes, infer from the
+    // choice name (Band-Pass / All-Pass sit on the zero line; Tilt Shelf keeps its gain).
+    const auto name = choiceName (ids::type (selected()), (int) t);
+    return name.containsIgnoreCase ("pass") || name.equalsIgnoreCase ("notch");
+}
+
+juce::AudioParameterChoice* BandEditorRail::choiceParam (const juce::String& id) const
+{
+    return dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (id));
+}
+
+int BandEditorRail::choiceIndex (const juce::String& id) const
+{
+    return (int) apvts.getRawParameterValue (id)->load();
+}
+
+juce::String BandEditorRail::choiceName (const juce::String& id, int idx) const
+{
+    if (auto* p = choiceParam (id))
+        if (idx >= 0 && idx < p->choices.size())
+            return p->choices[idx];
+    return {};
+}
+
+juce::String BandEditorRail::typeChipLabel (const juce::String& n)
+{
+    if (n == "High Pass")  return "HP";
+    if (n == "Low Shelf")  return "LO";
+    if (n == "Bell")       return "BELL";
+    if (n == "Notch")      return "NTCH";
+    if (n == "High Shelf") return "HI";
+    if (n == "Low Pass")   return "LP";
+    if (n == "Tilt Shelf") return "TILT";
+    if (n == "Band-Pass")  return "BP";
+    if (n == "All-Pass")   return "AP";
+    // Fallback for any unforeseen shape: initials of its words (so it never crashes/blanks).
+    juce::String s;
+    for (auto& w : juce::StringArray::fromTokens (n, " -", ""))
+        if (w.isNotEmpty())
+            s << w[0];
+    return s.toUpperCase().substring (0, 4);
+}
+
+juce::String BandEditorRail::slopeChipLabel (const juce::String& n)
+{
+    if (n.equalsIgnoreCase ("Brickwall"))
+        return "BW";
+    // "12 dB/oct" -> "12"
+    auto num = n.upToFirstOccurrenceOf (" ", false, false).trim();
+    return num.isNotEmpty() ? num : n;
 }
 
 void BandEditorRail::setChoice (const juce::String& id, int idx)
@@ -159,8 +219,7 @@ void BandEditorRail::refresh()
         bindToSelected();
         return;
     }
-    const bool onZero = sitsOnZeroLine (selectedType());
-    gainSlider.setEnabled (! onZero);
+    gainSlider.setEnabled (! selectedZeroLine());
     gainSlider.getProperties().set ("gradient",
         apvts.getRawParameterValue (ids::gain (selected()))->load() >= 0.0f ? "warm" : "cool");
     repaint();
@@ -168,126 +227,123 @@ void BandEditorRail::refresh()
 
 bool BandEditorRail::hasLiveReadout() const
 {
-    // Auto-gain shows a live trim figure on its toggle (any tab).
-    if (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)
-        return true;
-
-    // The DYN tab shows live gain reduction for an active dynamic band.
-    if (showDyn && ! sitsOnZeroLine (selectedType())
-        && apvts.getRawParameterValue (ids::dynOn (selected()))->load() > 0.5f)
-        return true;
-
-    return false;
+    // The selected band shows live gain reduction while its dynamic EQ is active.
+    return ! selectedZeroLine()
+        && apvts.getRawParameterValue (ids::dynOn (selected()))->load() > 0.5f;
 }
 
 BandEditorRail::Layout BandEditorRail::computeLayout() const
 {
     Layout L;
-    auto top = getLocalBounds();
-    L.header    = top.removeFromTop (18);
+    L.gainShown    = ! selectedZeroLine();
+    L.slopeShown   = isCut (selectedType());
+    L.dynAvailable = ! selectedZeroLine();
+    L.expertShown  = dynExpertOpen && L.dynAvailable;
+
+    auto full = getLocalBounds();
+    auto r = full.reduced (kPad);
+    int  y = kPad;   // running natural-height accumulator (constants only → robust if bounds are short)
+
+    auto take = [&r, &y] (int h, int gapAfter) -> juce::Rectangle<int>
     {
-        auto tabs = L.header.removeFromRight (74).withSizeKeepingCentre (74, 18);
-        L.eqTab  = tabs.removeFromLeft (35);
-        tabs.removeFromLeft (4);
-        L.dynTab = tabs;
-    }
-    top.removeFromTop (16);
-    L.typeChips = top.removeFromTop (28); top.removeFromTop (18);
-    L.freqBlock = top.removeFromTop (42); top.removeFromTop (16);
-    L.gainBlock = top.removeFromTop (42); top.removeFromTop (16);
-    L.qBlock    = top.removeFromTop (42); top.removeFromTop (8);
-    L.slopeRow  = top.removeFromTop (22); top.removeFromTop (16);
+        auto box = r.removeFromTop (h);
+        r.removeFromTop (gapAfter);
+        y += h + gapAfter;
+        return box;
+    };
 
-    // The DYN tab reuses the freq..slope span: an enable toggle, an Over/Under
-    // direction row, then 4 sliders.
+    L.header    = take (kHeaderH, 10);
+    L.typeChips = take (kTypeH, kGap);
+    L.freqBlock = take (kSliderH, kSub);
+    if (L.gainShown)
+        L.gainBlock = take (kSliderH, kSub);
+    L.qBlock    = take (kSliderH, kSub);
+    if (L.slopeShown)
+        L.slopeRow = take (kSlopeH, kSub);
+    r.removeFromTop (4); y += 4;
+    L.stereoRow = take (kStereoH, kGap);
+
+    L.dynHead = take (kDynHeadH, L.expertShown ? kSub : kGap);
+    if (L.expertShown)
     {
-        auto dynArea = L.freqBlock.getUnion (L.slopeRow);
-        L.dynEnable = dynArea.removeFromTop (30); dynArea.removeFromTop (8);
-        L.dynDir    = dynArea.removeFromTop (20); dynArea.removeFromTop (10);
-        const int h = (dynArea.getHeight() - 3 * 8) / 4;
-        L.dynS0 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
-        L.dynS1 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
-        L.dynS2 = dynArea.removeFromTop (h); dynArea.removeFromTop (8);
-        L.dynS3 = dynArea.removeFromTop (h);
+        L.dynDir = take (kDynDirH, kSub);
+        L.dynS0  = take (kDynSldH, kSub);
+        L.dynS1  = take (kDynSldH, kSub);
+        L.dynS2  = take (kDynSldH, kSub);
+        L.dynS3  = take (kDynSldH, kGap);
     }
-    L.onSolo    = top.removeFromTop (36); top.removeFromTop (14);
-    L.channelRow = top.removeFromTop (28);
 
-    // EQ-match panel fills the gap between on/solo and the bottom dial/toggle block.
-    auto matchArea = top;
-    matchArea.removeFromBottom (124 + 14);
-    matchArea.removeFromTop (20);
-    L.matchLabel  = matchArea.removeFromTop (16);
-    matchArea.removeFromTop (6);
-    L.matchAmtRow = matchArea.removeFromTop (38);
-    matchArea.removeFromTop (8);
-    L.matchBtnRow = matchArea.removeFromTop (34);
-    L.captureBtn  = L.matchBtnRow.withWidth (L.matchBtnRow.getWidth() / 2 - 3);
-    L.matchBtn    = L.matchBtnRow.withTrimmedLeft (L.matchBtnRow.getWidth() / 2 + 3);
+    L.matchLabel  = take (kMatchLblH, kSub);
+    L.matchAmtRow = take (kMatchAmtH, kSub);
+    auto btnRow   = take (kMatchBtnH, 0);
+    L.captureBtn  = btnRow.withWidth (btnRow.getWidth() / 2 - 3);
+    L.matchBtn    = btnRow.withTrimmedLeft (btnRow.getWidth() / 2 + 3);
 
-    auto bottom = getLocalBounds().removeFromBottom (124);
-    L.bottom = bottom;
-    auto inner = bottom.withTrimmedTop (18);
-    L.dial = inner.removeFromLeft (72);
-    inner.removeFromLeft (18);
-    L.modeBtn = inner.removeFromTop (30);
-    inner.removeFromTop (6);
-    L.hqBtn = inner.removeFromTop (30);
-    inner.removeFromTop (6);
-    L.autoBtn = inner.removeFromTop (30);
+    L.totalHeight = y + kPad;
     return L;
+}
+
+juce::Rectangle<int> BandEditorRail::getDesiredSize() const
+{
+    return { 0, 0, kPanelW, computeLayout().totalHeight };
 }
 
 juce::Rectangle<float> BandEditorRail::segment (juce::Rectangle<int> row, int i, int n, float gap) const
 {
-    const float w = ((float) row.getWidth() - gap * static_cast<float> (n - 1)) / (float) n;
+    const float w = ((float) row.getWidth() - gap * static_cast<float> (n - 1)) / (float) juce::jmax (1, n);
     return { (float) row.getX() + (w + gap) * (float) i, (float) row.getY(), w, (float) row.getHeight() };
 }
 
 void BandEditorRail::resized()
 {
     auto L = computeLayout();
-    const bool cut = sitsOnZeroLine (selectedType());
-    const bool dynControls = showDyn && ! cut;
 
-    freqSlider.setVisible (! showDyn);
-    gainSlider.setVisible (! showDyn);
-    qSlider.setVisible    (! showDyn);
-    threshSlider.setVisible (dynControls);
-    rangeSlider.setVisible  (dynControls);
-    attackSlider.setVisible (dynControls);
-    releaseSlider.setVisible (dynControls);
+    freqSlider.setVisible (true);
+    qSlider.setVisible    (true);
+    gainSlider.setVisible (L.gainShown);
+    const bool expert = L.expertShown;
+    threshSlider.setVisible  (expert);
+    rangeSlider.setVisible   (expert);
+    attackSlider.setVisible  (expert);
+    releaseSlider.setVisible (expert);
 
-    if (! showDyn)
+    freqSlider.setBounds (L.freqBlock.withTrimmedTop (16));
+    if (L.gainShown)
+        gainSlider.setBounds (L.gainBlock.withTrimmedTop (16));
+    qSlider.setBounds (L.qBlock.withTrimmedTop (16));
+
+    if (expert)
     {
-        freqSlider.setBounds (L.freqBlock.withTrimmedTop (24));
-        gainSlider.setBounds (L.gainBlock.withTrimmedTop (24));
-        qSlider.setBounds    (L.qBlock.withTrimmedTop (24));
-    }
-    else if (dynControls)
-    {
-        threshSlider.setBounds  (L.dynS0.withTrimmedTop (15));
-        rangeSlider.setBounds   (L.dynS1.withTrimmedTop (15));
-        attackSlider.setBounds  (L.dynS2.withTrimmedTop (15));
-        releaseSlider.setBounds (L.dynS3.withTrimmedTop (15));
+        threshSlider.setBounds  (L.dynS0.withTrimmedTop (14));
+        rangeSlider.setBounds   (L.dynS1.withTrimmedTop (14));
+        attackSlider.setBounds  (L.dynS2.withTrimmedTop (14));
+        releaseSlider.setBounds (L.dynS3.withTrimmedTop (14));
     }
 
-    outputDial.setBounds (L.dial.removeFromTop (60));
-    matchAmountSlider.setBounds (L.matchAmtRow.withTrimmedTop (20));
+    matchAmountSlider.setBounds (L.matchAmtRow.withTrimmedTop (18));
 }
 
 void BandEditorRail::paint (juce::Graphics& g)
 {
     auto L = computeLayout();
-    const int s = selected();
-    const auto type = selectedType();
-    const float freq = apvts.getRawParameterValue (ids::freq (s))->load();
-    const bool on    = apvts.getRawParameterValue (ids::on (s))->load() > 0.5f;
-    const bool solo  = apvts.getRawParameterValue (ids::solo (s))->load() > 0.5f;
-    const bool ms    = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
-    const auto col   = colourForFreq (freq);
 
-    // header
+    // floating card (sized to the natural content height; the rest of any taller bounds
+    // stays empty until Branch 2 sizes the panel to getDesiredSize()).
+    auto card = getLocalBounds().withHeight (juce::jmin (getHeight(), L.totalHeight)).toFloat();
+    juce::Path cardPath;
+    cardPath.addRoundedRectangle (card.reduced (0.5f), 14.0f);
+    juce::DropShadow (juce::Colours::black.withAlpha (0.45f), 24, { 0, 8 }).drawForPath (g, cardPath);
+    g.setGradientFill (juce::ColourGradient (panelTop, card.getCentreX(), card.getY(),
+                                             panelBase, card.getCentreX(), card.getBottom(), false));
+    g.fillPath (cardPath);
+    g.setColour (whiteAlpha (0.08f));
+    g.strokePath (cardPath, juce::PathStrokeType (1.0f));
+
+    const int s = selected();
+
+    // header: colour dot + band number
+    const float freq = apvts.getRawParameterValue (ids::freq (s))->load();
+    const auto  col  = colourForFreq (freq);
     auto header = L.header;
     auto dot = header.removeFromLeft (12).withSizeKeepingCentre (12, 12).toFloat();
     NeonLookAndFeel::glow (g, dot, col, 6.0f, 0.7f);
@@ -297,110 +353,99 @@ void BandEditorRail::paint (juce::Graphics& g)
     g.setFont (Fonts::grotesk (14.0f, Fonts::semibold));
     g.drawText ("BAND " + juce::String (s + 1), header.withTrimmedLeft (9), juce::Justification::centredLeft);
 
-    // EQ | DYN tab toggle (right of the header)
-    drawChip (g, L.eqTab.toFloat(),  ! showDyn, "EQ",  9.0f, 0.08f);
-    drawChip (g, L.dynTab.toFloat(),   showDyn, "DYN", 9.0f, 0.08f);
-
-    // type chips
-    for (int i = 0; i < numFilterTypes; ++i)
-        drawChip (g, segment (L.typeChips, i, numFilterTypes, 5.0f), (int) type == i,
-                  typeChipLabels[i], 9.0f, 0.05f);
-
-    // slider labels + values (FREQ/GAIN/Q or the DYN section)
-    paintSliderSection (g, L, s);
-
-    // enable / solo
-    auto onBtn = juce::Rectangle<int> (L.onSolo).removeFromLeft (L.onSolo.getWidth() / 2 - 3).toFloat();
-    auto soloBtn = juce::Rectangle<int> (L.onSolo).removeFromRight (L.onSolo.getWidth() / 2 - 3).toFloat();
-    drawToggle (g, onBtn, on, on ? "ENABLED" : "BYPASSED");
-    if (solo)
-    {
-        juce::ColourGradient grad (amber, soloBtn.getX(), soloBtn.getY(), pink, soloBtn.getX(), soloBtn.getBottom(), false);
-        g.setGradientFill (grad);
-        g.fillRoundedRectangle (soloBtn, 8.0f);
-        g.setColour (amber.withAlpha (0.6f));
-        g.drawRoundedRectangle (soloBtn.reduced (0.5f), 8.0f, 1.0f);
-        g.setColour (juce::Colour (0xff1c1a16));
-        g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
-        g.drawText ("SOLO", soloBtn, juce::Justification::centred);
-    }
-    else
-    {
-        g.setColour (whiteAlpha (0.06f));
-        g.fillRoundedRectangle (soloBtn, 8.0f);
-        g.setColour (whiteAlpha (0.12f));
-        g.drawRoundedRectangle (soloBtn.reduced (0.5f), 8.0f, 1.0f);
-        g.setColour (text2);
-        g.setFont (Fonts::grotesk (10.0f, Fonts::bold).withExtraKerningFactor (0.12f));
-        g.drawText ("SOLO", soloBtn, juce::Justification::centred);
-    }
-
-    // per-band channel lane (labels follow the global Stereo/MS domain)
-    {
-        const auto ch = (int) apvts.getRawParameterValue (ids::channel (s))->load();
-        const std::array<const char*, 3> lr  { "L + R", "L", "R" };
-        const std::array<const char*, 3> msl { "M + S", "M", "S" };
-        for (int i = 0; i < 3; ++i)
-            drawChip (g, segment (L.channelRow, i, 3, 5.0f), ch == i,
-                      ms ? msl[i] : lr[i], 9.0f, 0.06f);
-    }
-
-    // EQ-match panel
-    paintMatchPanel (g, L);
-
-    // bottom: divider, output dial caption/value, mode + hq
-    paintBottomBar (g, L);
+    paintBandControls (g, L, s);
+    paintDynSection   (g, L, s);
+    paintMatchSection (g, L);
 }
 
-void BandEditorRail::paintSliderSection (juce::Graphics& g, const Layout& L, int s) const
+void BandEditorRail::paintBandControls (juce::Graphics& g, const Layout& L, int s) const
 {
-    const auto type  = selectedType();
+    // type / shape chips (read live from the APVTS choice param)
+    const int typeSel = choiceIndex (ids::type (s));
+    if (auto* tp = choiceParam (ids::type (s)))
+    {
+        const int n = tp->choices.size();
+        for (int i = 0; i < n; ++i)
+            drawChip (g, segment (L.typeChips, i, n, 5.0f), typeSel == i,
+                      typeChipLabel (tp->choices[i]), 9.0f, 0.02f);
+    }
+
     const float freq = apvts.getRawParameterValue (ids::freq (s))->load();
     const float gain = apvts.getRawParameterValue (ids::gain (s))->load();
     const float q    = apvts.getRawParameterValue (ids::q (s))->load();
-    const int slope  = slopeIndexToValue ((int) apvts.getRawParameterValue (ids::slope (s))->load());
-    const bool cut   = isCut (type);
 
-    if (! showDyn)
+    drawSliderHead (g, L.freqBlock, "FREQUENCY", fmtFreq (freq) + "  " + noteName (freq), false);
+    if (L.gainShown)
+        drawSliderHead (g, L.gainBlock, "GAIN", fmtGain (gain), false);
+    drawSliderHead (g, L.qBlock, "Q", "Q " + juce::String (q, 2), false);
+
+    // slope picker (cuts only, read live so 72/96/Brickwall appear automatically)
+    if (L.slopeShown)
     {
-        drawSliderHead (g, L.freqBlock, "FREQUENCY", fmtFreq (freq) + "  " + noteName (freq), false);
-        drawSliderHead (g, L.gainBlock, "GAIN", cut ? juce::String ("—") : fmtGain (gain), cut);
-        drawSliderHead (g, L.qBlock, "Q / SLOPE",
-                        cut ? juce::String (slope) + " dB/oct  Q" + juce::String (q, 2)
-                            : "Q " + juce::String (q, 2), false);
-
-        // slope picker (cut filters only)
-        if (cut)
+        const int slopeSel = choiceIndex (ids::slope (s));
+        if (auto* sp = choiceParam (ids::slope (s)))
         {
-            const std::array<int, 3> slopes { 12, 24, 48 };
-            for (int i = 0; i < 3; ++i)
-                drawChip (g, segment (L.slopeRow, i, 3, 5.0f), slope == slopes[i],
-                          juce::String (slopes[i]) + " dB/oct", 9.0f, 0.03f);
+            const int n = sp->choices.size();
+            for (int i = 0; i < n; ++i)
+                drawChip (g, segment (L.slopeRow, i, n, 5.0f), slopeSel == i,
+                          slopeChipLabel (sp->choices[i]), 9.0f, 0.02f);
         }
-        return;
     }
 
-    if (cut)
+    // per-band stereo placement (labels follow the global Stereo/MS domain)
+    const bool ms = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
+    const int  ch = choiceIndex (ids::channel (s));
+    const std::array<const char*, 3> lr  { "L + R", "L", "R" };
+    const std::array<const char*, 3> msl { "M + S", "M", "S" };
+    for (int i = 0; i < 3; ++i)
+        drawChip (g, segment (L.stereoRow, i, 3, 5.0f), ch == i,
+                  ms ? msl[(size_t) i] : lr[(size_t) i], 9.0f, 0.06f);
+}
+
+void BandEditorRail::paintDynSection (juce::Graphics& g, const Layout& L, int s) const
+{
+    if (! L.dynAvailable)
     {
-        // dynamics not available for cut/notch filters
-        g.setColour (text3.withAlpha (0.6f));
-        g.setFont (Fonts::grotesk (11.0f, Fonts::semibold).withExtraKerningFactor (0.04f));
-        g.drawText ("DYNAMICS AVAILABLE ON BELL / SHELF BANDS",
-                    L.freqBlock.getUnion (L.slopeRow), juce::Justification::centred);
+        g.setColour (text3.withAlpha (0.55f));
+        g.setFont (Fonts::grotesk (10.0f, Fonts::semibold).withExtraKerningFactor (0.04f));
+        g.drawText ("DYNAMICS — BELL / SHELF ONLY", L.dynHead, juce::Justification::centredLeft);
         return;
     }
 
     const bool dynOn = apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f;
-    const float thr  = apvts.getRawParameterValue (ids::dynThresh (s))->load();
-    const float rng  = apvts.getRawParameterValue (ids::dynRange (s))->load();
-    const float att  = apvts.getRawParameterValue (ids::dynAttack (s))->load();
-    const float rel  = apvts.getRawParameterValue (ids::dynRelease (s))->load();
     const float live = proc.getDynGainDb (s);
 
-    drawToggle (g, L.dynEnable.toFloat(), dynOn, dynOn ? "DYNAMICS ON" : "DYNAMICS OFF");
+    // header: DYNAMICS on/off toggle (left) + expand chevron (right)
+    auto head = L.dynHead;
+    auto chevron = head.removeFromRight (26);
+    head.removeFromRight (6);
+    juce::String dynLabel = dynOn ? "DYNAMICS ON" : "DYNAMICS";
+    if (dynOn && std::abs (live) > 0.05f)
+        dynLabel = "DYN  " + juce::String (live, 1) + " dB";
+    drawToggle (g, head.toFloat(), dynOn, dynLabel);
 
-    // Over/Under detection direction: label on the left, two chips on the right.
-    const int dynDir = (int) apvts.getRawParameterValue (ids::dynDir (s))->load();
+    // expand/collapse chevron (drawn as a triangle so it never depends on a glyph)
+    {
+        auto c = chevron.toFloat();
+        g.setColour (dynExpertOpen ? accent.withAlpha (0.16f) : whiteAlpha (0.06f));
+        g.fillRoundedRectangle (c, 6.0f);
+        g.setColour (dynExpertOpen ? accent.withAlpha (0.30f) : whiteAlpha (0.08f));
+        g.drawRoundedRectangle (c.reduced (0.5f), 6.0f, 1.0f);
+        const auto cc = c.getCentre();
+        juce::Path tri;
+        if (dynExpertOpen)
+            tri.addTriangle (cc.x - 4.0f, cc.y - 2.0f, cc.x + 4.0f, cc.y - 2.0f, cc.x, cc.y + 3.0f);
+        else
+            tri.addTriangle (cc.x - 2.0f, cc.y - 4.0f, cc.x - 2.0f, cc.y + 4.0f, cc.x + 3.0f, cc.y);
+        g.setColour (dynExpertOpen ? accent : text3);
+        g.fillPath (tri);
+    }
+
+    if (! L.expertShown)
+        return;
+
+    // expert sub-pane: REACT direction + threshold/range/attack/release
+    const int dynDir = choiceIndex (ids::dynDir (s));
     {
         auto row = L.dynDir;
         auto labelArea = row.removeFromLeft (row.getWidth() / 2);
@@ -411,6 +456,11 @@ void BandEditorRail::paintSliderSection (juce::Graphics& g, const Layout& L, int
         drawChip (g, segment (row, 1, 2, 6.0f), dynDir == 1, "UNDER", 9.0f, 0.04f);
     }
 
+    const float thr = apvts.getRawParameterValue (ids::dynThresh (s))->load();
+    const float rng = apvts.getRawParameterValue (ids::dynRange (s))->load();
+    const float att = apvts.getRawParameterValue (ids::dynAttack (s))->load();
+    const float rel = apvts.getRawParameterValue (ids::dynRelease (s))->load();
+
     drawSliderHead (g, L.dynS0, "THRESHOLD", juce::String (thr, 1) + " dB", ! dynOn);
     drawSliderHead (g, L.dynS1, "RANGE",
                     (rng >= 0 ? "+" : "") + juce::String (rng, 1) + " dB"
@@ -420,7 +470,7 @@ void BandEditorRail::paintSliderSection (juce::Graphics& g, const Layout& L, int
     drawSliderHead (g, L.dynS3, "RELEASE", juce::String (rel, 0) + " ms", ! dynOn);
 }
 
-void BandEditorRail::paintMatchPanel (juce::Graphics& g, const Layout& L) const
+void BandEditorRail::paintMatchSection (juce::Graphics& g, const Layout& L) const
 {
     auto label = L.matchLabel;
     g.setColour (textLabel);
@@ -454,73 +504,44 @@ void BandEditorRail::paintMatchPanel (juce::Graphics& g, const Layout& L) const
     g.drawText ("MATCH", mb, juce::Justification::centred);
 }
 
-void BandEditorRail::paintBottomBar (juce::Graphics& g, const Layout& L) const
+bool BandEditorRail::handleDynClick (const Layout& L, juce::Point<float> p, int s)
 {
-    const bool ms   = apvts.getRawParameterValue (ids::mode)->load() > 0.5f;
-    const bool hq   = apvts.getRawParameterValue (ids::hq)->load() > 0.5f;
-    const float out = apvts.getRawParameterValue (ids::output)->load();
+    if (! L.dynAvailable)
+        return false;
 
-    g.setColour (whiteAlpha (0.08f));
-    g.drawHorizontalLine (L.bottom.getY(), 0.0f, (float) getWidth());
-
-    auto dialArea = L.dial;
-    auto caption = dialArea.withTop (dialArea.getY() + 60);
-    g.setColour (textMuted);
-    g.setFont (Fonts::grotesk (9.0f, Fonts::semibold).withExtraKerningFactor (0.22f));
-    g.drawText ("OUTPUT", caption.withHeight (12), juce::Justification::centred);
-    g.setColour (text2);
-    g.setFont (Fonts::mono (11.0f, true));
-    g.drawText ((out >= 0.0f ? "+" : "") + juce::String (out, 1) + " dB",
-                caption.withTrimmedTop (12).withHeight (14), juce::Justification::centred);
-
-    const bool ag = apvts.getRawParameterValue (ids::autogain)->load() > 0.5f;
-    juce::String autoLabel = "AUTO GAIN";
-    if (ag) autoLabel << "   " << juce::String (proc.getAutoGainTrimDb(), 1) << " dB";
-
-    drawToggle (g, L.modeBtn.toFloat(), ms, ms ? "MID/SIDE" : "STEREO");
-    drawToggle (g, L.hqBtn.toFloat(), hq, "HQ OVERSAMPLING");
-    drawToggle (g, L.autoBtn.toFloat(), ag, autoLabel);
-}
-
-bool BandEditorRail::handleSubRegionClick (const Layout& L, juce::Point<float> p, int s)
-{
-    if (showDyn)
+    auto head = L.dynHead;
+    auto chevron = head.removeFromRight (26);
+    head.removeFromRight (6);
+    if (chevron.toFloat().contains (p))
     {
-        if (sitsOnZeroLine (selectedType()))
-            return false;
+        dynExpertOpen = ! dynExpertOpen;
+        resized();
+        repaint();
+        return true;
+    }
+    if (head.toFloat().contains (p))
+    {
+        const bool now = ! (apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f);
+        setBool (ids::dynOn (s), now);
+        if (now)
+            dynExpertOpen = true;   // turning dynamics on reveals the expert pane
+        resized();
+        repaint();
+        return true;
+    }
 
-        if (L.dynEnable.toFloat().contains (p))
+    if (! L.expertShown)
+        return false;
+
+    auto dirRow = L.dynDir;
+    dirRow.removeFromLeft (dirRow.getWidth() / 2);
+    for (int i = 0; i < 2; ++i)
+        if (segment (dirRow, i, 2, 6.0f).contains (p))
         {
-            setBool (ids::dynOn (s), ! (apvts.getRawParameterValue (ids::dynOn (s))->load() > 0.5f));
-            refresh();
+            setChoice (ids::dynDir (s), i);
+            repaint();
             return true;
         }
-
-        // Over/Under direction chips (right half of the dynDir row).
-        auto dirRow = L.dynDir;
-        dirRow.removeFromLeft (dirRow.getWidth() / 2);
-        for (int i = 0; i < 2; ++i)
-            if (segment (dirRow, i, 2, 6.0f).contains (p))
-            {
-                setChoice (ids::dynDir (s), i);
-                repaint();
-                return true;
-            }
-
-        return false;
-    }
-
-    if (isCut (selectedType()))
-    {
-        for (int i = 0; i < 3; ++i)
-            if (segment (L.slopeRow, i, 3, 5.0f).contains (p))
-            {
-                setChoice (ids::slope (s), i);
-                repaint();
-                return true;
-            }
-    }
-
     return false;
 }
 
@@ -530,38 +551,46 @@ void BandEditorRail::mouseDown (const juce::MouseEvent& e)
     const int s = selected();
     const auto p = e.position;
 
-    // EQ | DYN tab
-    if (L.eqTab.toFloat().contains (p))  { showDyn = false; resized(); repaint(); return; }
-    if (L.dynTab.toFloat().contains (p)) { showDyn = true;  resized(); repaint(); return; }
+    // type / shape chips
+    if (auto* tp = choiceParam (ids::type (s)))
+    {
+        const int n = tp->choices.size();
+        for (int i = 0; i < n; ++i)
+            if (segment (L.typeChips, i, n, 5.0f).contains (p))
+            {
+                setChoice (ids::type (s), i);
+                refresh();
+                return;
+            }
+    }
 
-    for (int i = 0; i < numFilterTypes; ++i)
-        if (segment (L.typeChips, i, numFilterTypes, 5.0f).contains (p))
+    // slope chips (cuts only)
+    if (L.slopeShown)
+        if (auto* sp = choiceParam (ids::slope (s)))
         {
-            setChoice (ids::type (s), i);
-            refresh();
-            return;
+            const int n = sp->choices.size();
+            for (int i = 0; i < n; ++i)
+                if (segment (L.slopeRow, i, n, 5.0f).contains (p))
+                {
+                    setChoice (ids::slope (s), i);
+                    repaint();
+                    return;
+                }
         }
 
-    if (handleSubRegionClick (L, p, s))
-        return;
-
-    auto onBtn = juce::Rectangle<int> (L.onSolo).removeFromLeft (L.onSolo.getWidth() / 2 - 3).toFloat();
-    auto soloBtn = juce::Rectangle<int> (L.onSolo).removeFromRight (L.onSolo.getWidth() / 2 - 3).toFloat();
-    if (onBtn.contains (p))   { setBool (ids::on (s),   ! (apvts.getRawParameterValue (ids::on (s))->load() > 0.5f)); repaint(); return; }
-    if (soloBtn.contains (p)) { setBool (ids::solo (s), ! (apvts.getRawParameterValue (ids::solo (s))->load() > 0.5f)); repaint(); return; }
-
+    // stereo placement chips
     for (int i = 0; i < 3; ++i)
-        if (segment (L.channelRow, i, 3, 5.0f).contains (p))
+        if (segment (L.stereoRow, i, 3, 5.0f).contains (p))
         {
             setChoice (ids::channel (s), i);
             repaint();
             return;
         }
 
-    if (L.modeBtn.toFloat().contains (p)) { setChoice (ids::mode, apvts.getRawParameterValue (ids::mode)->load() > 0.5f ? 0 : 1); repaint(); return; }
-    if (L.hqBtn.toFloat().contains (p))   { setBool (ids::hq, ! (apvts.getRawParameterValue (ids::hq)->load() > 0.5f)); repaint(); return; }
-    if (L.autoBtn.toFloat().contains (p)) { setBool (ids::autogain, ! (apvts.getRawParameterValue (ids::autogain)->load() > 0.5f)); repaint(); return; }
+    if (handleDynClick (L, p, s))
+        return;
 
+    // EQ-match buttons
     if (L.captureBtn.toFloat().contains (p)) { if (onCapture) { onCapture(); } repaint(); return; }
     if (L.matchBtn.toFloat().contains (p) && proc.hasMatchData()) { if (onMatch) { onMatch(); } repaint(); return; }
 }

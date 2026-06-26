@@ -14,6 +14,7 @@
 // never created, so the test runs headless with no message thread or display.
 
 #include "PluginProcessor.h"
+#include "Presets.h"     // applyPreset / matchesPreset
 #include "gui/Theme.h"   // noteName()
 
 #include <cmath>
@@ -789,6 +790,44 @@ int main()
         p2.prepareToPlay (sr, blockSize);
         const double dbl = runSineGainDb (p2, 1000.0, 0.25);
         check (within (dbl, 6.0206, 0.2), "gainScale 200% scales output by +6 dB", dbl);
+    }
+
+    // --- 20. Presets honour the active model (covers Presets.h) ------------
+    {
+        ZandersEqAudioProcessor p;
+        auto& apvts = p.getApvts();
+        const auto& pr = presets();
+        const auto& preset = pr[1];                  // "Vocal Air" (4 bands)
+        const int used = (int) preset.bands.size();
+
+        applyPreset (apvts, preset);
+        check (p.activeBandCount() == used, "applyPreset activates exactly the preset's bands", p.activeBandCount());
+        bool flagsOk = true;
+        for (int i = 0; i < numBands; ++i)
+            flagsOk = flagsOk && ((apvts.getRawParameterValue (ids::active (i))->load() > 0.5f) == (i < used));
+        check (flagsOk,                         "applyPreset active flags match the preset band count");
+        check (matchesPreset (apvts, preset),   "matchesPreset is true right after applyPreset");
+        check (! matchesPreset (apvts, pr[0]),  "matchesPreset is false for a different preset");
+
+        // A used band turned off breaks the match (covers the !active early-out).
+        setP (p, ids::active (0), 0.0f);
+        check (! matchesPreset (apvts, preset), "matchesPreset false when a used band is inactive");
+
+        // A spare band turned on also breaks the match (covers the else-if active branch).
+        applyPreset (apvts, preset);
+        setP (p, ids::active (used), 1.0f);
+        check (! matchesPreset (apvts, preset), "matchesPreset false when a spare band is active");
+    }
+
+    // --- 21. Dynamic-band API bounds are defensive -------------------------
+    {
+        ZandersEqAudioProcessor p;
+        check (! p.isBandActive (-1),       "isBandActive(-1) is false");
+        check (! p.isBandActive (numBands), "isBandActive(numBands) is false");
+        const int before = p.activeBandCount();
+        p.removeBand (-1);                   // out-of-range: no-op, must not crash/alter state
+        p.removeBand (numBands);
+        check (p.activeBandCount() == before, "removeBand ignores out-of-range slots", p.activeBandCount());
     }
 
     std::printf ("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED",

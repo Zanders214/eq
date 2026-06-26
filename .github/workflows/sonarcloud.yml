@@ -56,7 +56,11 @@ jobs:
         # JUCE's amalgamated modules are compiled into the test exes, so they get instrumented
         # too. gcov can't resolve HarfBuzz's generated .rl/.hh sources and errors out; without
         # ignoring those, gcovr exits non-zero. --filter keeps only our src/ in the report.
-        run: gcovr --root . --filter 'src/' --gcov-ignore-errors=all --sonarqube coverage.xml
+        # --exclude-throw-branches drops gcov's C++ exception-unwinding edges (the implicit
+        # throw/no-throw branch at every call site): they are not real, testable conditions, and
+        # counting them as uncovered understates branch coverage on call-dense code (e.g. the
+        # forEachParamId param sweep) and skews SonarCloud's new-code coverage downward.
+        run: gcovr --root . --filter 'src/' --gcov-ignore-errors=all --exclude-throw-branches --sonarqube coverage.xml
 
       - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v7

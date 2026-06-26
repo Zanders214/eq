@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782500537502,
+  "lastUpdate": 1782503229155,
   "repoUrl": "https://github.com/Zanders214/eq",
   "entries": {
     "ZandersEQ DSP": [
@@ -307,6 +307,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "DSP load HQ 2x @48k/512",
             "value": 0.605,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "152227414+Zanders214@users.noreply.github.com",
+            "name": "Dennis Zanders",
+            "username": "Zanders214"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ca6d56a3f27400ba05840e6de6cf323b011db86f",
+          "message": "Merge pull request #20 from Zanders214/claude/proq4-hero-graph-d8l2i2\n\nfeat: expose Pro-Q 4 filter shapes & steep slopes (+ deep-cascade non-finite guard)",
+          "timestamp": "2026-06-26T21:44:41+02:00",
+          "tree_id": "8794d203bc205ad44a5fa39070bb1f5ddcf03d36",
+          "url": "https://github.com/Zanders214/eq/commit/ca6d56a3f27400ba05840e6de6cf323b011db86f"
+        },
+        "date": 1782503228659,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "processBlock @48k/512",
+            "value": 37244.321,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load @48k/512",
+            "value": 0.349,
+            "unit": "%"
+          },
+          {
+            "name": "processBlock HQ 2x @48k/512",
+            "value": 77143.361,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load HQ 2x @48k/512",
+            "value": 0.723,
             "unit": "%"
           }
         ]

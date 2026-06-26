@@ -26,24 +26,42 @@ enum class FilterType
     bell,           // BELL (peaking)
     notch,          // NTCH
     highShelf,      // HI
-    lowPass         // LP
+    lowPass,        // LP
+    tiltShelf,      // TILT  (= 6) — pivots at f0: one side +gain, the other -gain
+    bandPass,       // BP    (= 7) — RBJ constant 0 dB peak; sits on the zero line
+    allPass         // AP    (= 8) — unity magnitude, phase rotation only
 };
 
-inline constexpr int numFilterTypes = 6;
+// Total FilterType values. NOTE: the GUI's BandEditorRail typeChipLabels array and
+// Parameters.h filterTypeChoices() must grow to match (TILT/BP/AP) before the new
+// types are reachable from the UI; the DSP itself never depends on this constant.
+inline constexpr int numFilterTypes = 9;
 
 // Fixed pool of EQ bands. Lives here (the pure header) so non-JUCE code such as
 // MatchFit can share it. Bump to expand the EQ; strip/nodes/params follow.
 inline constexpr int numBands = 24;
+
+// Deepest identical-biquad cascade the engine supports (12 dB/oct per stage, so 96 dB/oct).
+// Biquad.h aliases its maxCascade to this so the array depth and the slope math share one
+// source of truth and can never disagree.
+inline constexpr int kMaxCascadeStages = 8;
+
+// Sentinel "slope" value meaning Brickwall — NOT a real dB/oct figure. stagesForSlope maps it
+// to the deepest cascade via a dedicated path. Branch 1's slopeIndexToValue() maps the
+// "Brickwall" choice to this value.
+inline constexpr int kBrickwallSlope = 100000;
 
 inline bool isCut (FilterType t) noexcept
 {
     return t == FilterType::highPass || t == FilterType::lowPass;
 }
 
-// HP/LP/Notch sit on the 0 dB line on the graph (no gain handle).
+// HP/LP/Notch/Band-pass/All-pass sit on the 0 dB line on the graph (no gain handle).
+// Tilt shelf is deliberately NOT here: it has gain and keeps its handle.
 inline bool sitsOnZeroLine (FilterType t) noexcept
 {
-    return t == FilterType::highPass || t == FilterType::lowPass || t == FilterType::notch;
+    return t == FilterType::highPass || t == FilterType::lowPass || t == FilterType::notch
+        || t == FilterType::bandPass || t == FilterType::allPass;
 }
 
 // One biquad's coefficients, normalised so a0 == 1 (ready for Transposed Direct-Form II).
@@ -74,6 +92,11 @@ struct BiquadCoeffs
         return std::sqrt (num / std::max (1.0e-20, den));
     }
 };
+
+// Forward declaration (defined below): the constant-0-dB-peak band-pass, shared with the
+// per-band dynamic-EQ detector. makeCoeffs's bandPass case reuses it so the user-facing
+// band-pass and the detector can never drift apart.
+inline BiquadCoeffs makeBandpass (double freq, double q, double sampleRate) noexcept ZEQ_RT_NONBLOCKING;
 
 // RBJ cookbook coefficients for one band, normalised to a0 = 1.
 inline BiquadCoeffs makeCoeffs (FilterType type, double freq, double gainDb, double q, double sampleRate) noexcept ZEQ_RT_NONBLOCKING
@@ -134,6 +157,34 @@ inline BiquadCoeffs makeCoeffs (FilterType type, double freq, double gainDb, dou
             a0 = 1.0 + alpha; a1 = -2.0 * cw; a2 = 1.0 - alpha;
             break;
         }
+        case FilterType::tiltShelf:
+        {
+            // First-order-style tilt: a high-shelf of +2*gain, then the whole curve offset by
+            // -gain so it pivots through 0 dB EXACTLY at f0 (for every Q — the RBJ shelf hits
+            // the geometric mean of its DC/Nyquist gains at the corner). Positive gain => highs
+            // up (+gain near Nyquist), lows down (-gain at DC). Swap to the low-shelf block to
+            // invert the direction.
+            const double At = std::pow (10.0, gainDb / 20.0); // shelf gain = 2*gain => pow(10, 2g/40)
+            const double ap = 2.0 * std::sqrt (At) * alpha;
+            b0 =        At * ((At + 1.0) + (At - 1.0) * cw + ap);
+            b1 = -2.0 * At * ((At - 1.0) + (At + 1.0) * cw);
+            b2 =        At * ((At + 1.0) + (At - 1.0) * cw - ap);
+            a0 =             (At + 1.0) - (At - 1.0) * cw + ap;
+            a1 =     2.0 * ((At - 1.0) - (At + 1.0) * cw);
+            a2 =             (At + 1.0) - (At - 1.0) * cw - ap;
+            const double k = std::pow (10.0, -gainDb / 20.0); // -gain dB offset of the whole curve
+            b0 *= k; b1 *= k; b2 *= k;                         // numerator only => scales |H| uniformly
+            break;
+        }
+        case FilterType::bandPass:
+            return makeBandpass (freq, q, sampleRate);        // RBJ constant 0 dB peak; gain ignored
+        case FilterType::allPass:
+        {
+            // RBJ all-pass: |H| == 1 at every frequency (phase rotation only).
+            b0 = 1.0 - alpha; b1 = -2.0 * cw; b2 = 1.0 + alpha;
+            a0 = 1.0 + alpha; a1 = -2.0 * cw; a2 = 1.0 - alpha;
+            break;
+        }
         case FilterType::bell:
         default:
         {
@@ -148,11 +199,17 @@ inline BiquadCoeffs makeCoeffs (FilterType type, double freq, double gainDb, dou
 }
 
 // How many cascaded biquads a cut filter needs for the given slope (dB/oct).
+// The min(kMaxCascadeStages, …) clamp is the single guard that keeps activeStages within the
+// cascade depth — without it a stale/garbage or sentinel slope would index past the array (a
+// memory-safety bug, not just an RT one). bandMagnitudeDb calls this too, so the drawn curve
+// clamps identically to the audio path.
 inline int stagesForSlope (FilterType type, int slopeDbPerOct) noexcept
 {
     if (! isCut (type))
         return 1;
-    return std::max (1, slopeDbPerOct / 12); // 12->1, 24->2, 48->4
+    if (slopeDbPerOct >= kBrickwallSlope)
+        return kMaxCascadeStages;                                          // Brickwall: deepest cascade
+    return std::max (1, std::min (kMaxCascadeStages, slopeDbPerOct / 12)); // 12->1, 24->2, 48->4, 72->6, 96->8
 }
 
 // RBJ band-pass (constant 0 dB peak gain), normalised to a0 = 1 — the per-band

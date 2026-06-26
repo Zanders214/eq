@@ -28,6 +28,9 @@ EqContent::EqContent (ZandersEqAudioProcessor& p)
     auto rebind = [this] { rail.bindToSelected(); positionBandPanel(); strip.repaint(); graph.repaint(); };
     graph.onSelectionChanged = rebind;
     strip.onSelectionChanged = rebind;
+    // C4: the graph fires this on selection change AND while the selected node is dragged, so the
+    // floating band card tracks the node (rebind covers BandStrip selection, which doesn't fire it).
+    graph.onBandFocused = [this] (int) { positionBandPanel(); };
     presetBar.onPresetApplied = [this] { rail.refresh(); positionBandPanel(); graph.repaint(); strip.repaint(); };
     rail.onCapture = [this] { graph.toggleCapture(); };
     rail.onMatch   = [this] { graph.runMatch(); strip.repaint(); rail.refresh(); positionBandPanel(); graph.repaint(); };
@@ -133,36 +136,38 @@ void EqContent::layoutToolbar (juce::Rectangle<int> tb)
     presetBar.setBounds (tb.reduced (0, 8));
 }
 
-// The band card floats over the spectrum (Pro-Q style) instead of living in a side rail.
+// The band card floats under the selected node (Pro-Q style) instead of living in a side rail.
 void EqContent::positionBandPanel()
 {
-    // ===================== C4 INTEGRATION SEAM (Branch 3 graph) =====================
-    // Once feat/proq4-graph merges (publishing the C4 graph API), REPLACE the fixed
-    // anchor below with the under-the-node wiring:
-    //
-    //   In the ctor, subscribe once:
-    //       graph.onBandFocused = [this](int slot){ positionBandPanel(); };
-    //   Here, anchor to the selected node:
-    //       const auto a = graph.getBandScreenBounds (graph-local rect for the selected slot);
-    //       translate `a` into EqContent coords (offset by graph.getBounds().getPosition()),
-    //       place the card just below it, then clamp to the window as below.
-    //
-    // Until that API exists on `dev`, dock the card at the top-right of the spectrum so the
-    // band controls + EQ-match stay usable — WITHOUT re-deriving node geometry that the
-    // graph (Branch 3) owns (C4 keeps node position single-source in the graph).
-    // ===============================================================================
-    const auto want = rail.getDesiredSize();                 // juce::Rectangle<int> (w, h)
+    // C4: the graph owns node geometry. Ask it for the selected node's bounds (graph-local),
+    // translate into EqContent coords, then place + clamp the card.
+    const int  slot      = proc.getSelectedBand();
+    const auto nodeLocal = graph.getBandScreenBounds (slot);   // empty if inactive / off-screen
+    if (nodeLocal.isEmpty())
+    {
+        rail.setVisible (false);                               // nothing to anchor to -> hide
+        return;
+    }
+    const auto node = nodeLocal + graph.getPosition();         // -> EqContent coords
+
+    const auto want = rail.getDesiredSize();                   // juce::Rectangle<int> (w, h)
     const int w = juce::jmax (1, want.getWidth());
     int       h = juce::jmax (1, want.getHeight());
-    h = juce::jmin (h, juce::jmax (1, wellBounds.getHeight() - 32));
+    h = juce::jmin (h, juce::jmax (1, wellBounds.getHeight() - 16));
 
-    int x = wellBounds.getRight() - w - 16;
-    int y = wellBounds.getY() + 16;
-    x = juce::jmax (wellBounds.getX() + 8, x);               // never push off the left edge
+    // Prefer below the node; flip above if it would overflow the well bottom.
+    int x = node.getCentreX() - w / 2;
+    int y = node.getBottom() + 10;
+    if (y + h > wellBounds.getBottom() - 8)
+        y = node.getY() - 10 - h;
+
+    // Clamp inside the well with jmax/jmin (jlimit would assert if the range is degenerate).
+    x = juce::jmax (wellBounds.getX() + 8, juce::jmin (x, wellBounds.getRight()  - w - 8));
+    y = juce::jmax (wellBounds.getY() + 8, juce::jmin (y, wellBounds.getBottom() - h - 8));
 
     rail.setBounds (x, y, w, h);
     rail.setVisible (true);
-    rail.toFront (false);                                    // sit above the spectrum child
+    rail.toFront (false);                                      // sit above the spectrum child
 }
 
 // ---- paint ------------------------------------------------------------------
@@ -369,10 +374,13 @@ void EqContent::paintToolbar (juce::Graphics& g)
     pill (hqBtn,     "HQ",     boolParam (ids::hq),           true, accent);
     pill (autoBtn,   "AUTO",   boolParam (ids::autogain),     true, accent);
 
-    // View toggles — wired to Branch 3's graph API once feat/proq4-graph lands; inert here.
-    pill (fsBtn,     "FS",  false, false, accent);
-    pill (sketchBtn, "SKT", false, false, accent);
-    pill (pianoBtn,  "PNO", false, false, accent);
+    // View toggles — full-screen (editor window) + EQ-Sketch / piano overlay (Branch 3 graph).
+    bool fsOn = false;
+    if (auto* ed = findParentComponentOfClass<ZandersEqEditor>())
+        fsOn = ed->isMaximized();
+    pill (fsBtn,     "FS",  fsOn,                   true, accent);
+    pill (sketchBtn, "SKT", graph.isSketchActive(), true, accent);
+    pill (pianoBtn,  "PNO", graph.isPianoVisible(), true, accent);
 }
 
 // ---- param helpers ----------------------------------------------------------
@@ -449,8 +457,12 @@ void EqContent::mouseDown (const juce::MouseEvent& e)
     if (anOnBtn.contains (pos))      { cycleChoiceParam (ids::analyzerOn);    return; }
     if (anRangeBtn.contains (pos))   { cycleChoiceParam (ids::analyzerRange); return; }
 
+    // View toggles: piano overlay + EQ-Sketch call into the graph (C4); FS maximises the window.
+    if (pianoBtn.contains (pos))  { graph.setPianoVisible (! graph.isPianoVisible()); repaint (toolbarBounds); return; }
+    if (sketchBtn.contains (pos)) { graph.setSketchActive (! graph.isSketchActive()); repaint (toolbarBounds); return; }
+    if (fsBtn.contains (pos))     { if (auto* ed = findParentComponentOfClass<ZandersEqEditor>()) ed->toggleFullscreen(); repaint (toolbarBounds); return; }
+
     // phaseSeg: only Zero Latency behaves this round (C5) — Natural/Linear are no-ops.
-    // fsBtn / sketchBtn / pianoBtn: view toggles pending Branch 3's graph API — no-ops here.
 }
 
 void EqContent::mouseDrag (const juce::MouseEvent& e)
@@ -523,6 +535,27 @@ ZandersEqEditor::~ZandersEqEditor()
 {
     // Detach before the component tree is torn down (must precede member destruction).
     openGLContext.detach();
+}
+
+bool ZandersEqEditor::isMaximized() const noexcept
+{
+    return getWidth() >= juce::roundToInt (designW * 1.7) - 1;   // within rounding of maxW
+}
+
+void ZandersEqEditor::toggleFullscreen()
+{
+    const int maxW = juce::roundToInt (designW * 1.7);
+    if (! isMaximized())
+    {
+        preFsWidth = getWidth();
+        setSize (maxW, juce::roundToInt (maxW * (double) designH / designW));
+    }
+    else
+    {
+        const int minW = juce::roundToInt (designW * 0.6);
+        const int w = juce::jlimit (minW, maxW, preFsWidth > 0 ? preFsWidth : designW);
+        setSize (w, juce::roundToInt (w * (double) designH / designW));
+    }
 }
 
 void ZandersEqEditor::paint (juce::Graphics& g)

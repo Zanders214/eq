@@ -106,6 +106,11 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    // Full-screen toggle (no graph API for this — it's window-level): maximise the editor to
+    // its max allowed size and back. Driven by the toolbar's FS button.
+    void toggleFullscreen();
+    bool isMaximized() const noexcept;
+
     // Pro-Q-style landscape canvas (was 1100x772). Uniform aspect-locked scaling and the
     // persisted-width logic below are unchanged — only the design proportions widened.
     static constexpr int designW = 1280;
@@ -115,6 +120,7 @@ private:
     ZandersEqAudioProcessor& proc;
     EqContent content;
     juce::ComponentBoundsConstrainer constrainer;
+    int preFsWidth = 0;   // width remembered before maximising, restored on toggle-off
 
     // GPU-accelerated rendering: offloads all the vector rasterisation (spectrum,
     // curve, glows) from the CPU. Detached explicitly in the destructor.

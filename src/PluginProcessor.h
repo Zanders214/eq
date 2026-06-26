@@ -73,6 +73,7 @@ public:
     // --- editor access ---------------------------------------------------
     juce::AudioProcessorValueTreeState& getApvts() noexcept { return apvts; }
     AnalyzerFifo& getAnalyzerFifo() noexcept { return analyzer; }
+    AnalyzerFifo& getPreEqAnalyzerFifo() noexcept { return preEqAnalyzer; }   // pre-EQ (input) tap
     double getActiveSampleRate() const noexcept { return baseSampleRate; }
     float getAutoGainTrimDb() const noexcept { return autoGainDb.load(); }
     float getDynGainDb (int band) const noexcept { return dynGainDisplay[(size_t) band].load(); }
@@ -99,6 +100,16 @@ public:
     void setEditorWidth (int w) noexcept         { editorWidth = w; }
     juce::String getCurrentSlot() const          { return abSlot; }
     void toggleABSlot (const juce::String& slot); // swaps the live params with the stored A/B snapshot
+
+    // --- Dynamic band pool (Pro-Q add/remove model; message-thread only) ------
+    // The pool is a fixed compile-time array of numBands slots; a band "exists" when its
+    // `active` flag is set. These flip APVTS params only — no runtime allocation in the
+    // engine — and each add/remove is wrapped as a single undoable edit.
+    int  activeBandCount() const noexcept;            // slots whose `active` flag is set
+    bool isBandActive (int slot) const noexcept;      // is this slot's `active` flag set?
+    int  firstFreeSlot() const noexcept;              // lowest inactive slot, or -1 if full
+    int  addBand (float freq, float gain, FilterType type); // activates firstFreeSlot; slot or -1 if full
+    void removeBand (int slot);                       // clears the slot's `active` flag
 
     // --- Undo/redo (whole-parameter snapshots; message-thread only) -----------
     void beginUndoTransaction();                          // capture the pre-edit state
@@ -130,6 +141,7 @@ private:
         std::atomic<float>* q     = nullptr;
         std::atomic<float>* slope = nullptr;
         std::atomic<float>* on    = nullptr;
+        std::atomic<float>* active = nullptr;
         std::atomic<float>* solo  = nullptr;
         std::atomic<float>* channel = nullptr;
         std::atomic<float>* dynOn    = nullptr;
@@ -164,6 +176,8 @@ private:
     std::atomic<float>* modeParam     = nullptr;
     std::atomic<float>* hqParam        = nullptr;
     std::atomic<float>* autogainParam = nullptr;
+    std::atomic<float>* gainScaleParam = nullptr;   // overall EQ gain (0..200%), output stage
+    std::atomic<float>* bypassParam    = nullptr;   // whole-EQ bypass (full passthrough)
 
     // DSP state
     std::array<BandDsp, numBands>                                bands;
@@ -191,7 +205,8 @@ private:
     std::atomic<float> autoGainDb { 0.0f };
     std::array<std::atomic<float>, numBands> dynGainDisplay { };
 
-    AnalyzerFifo analyzer;
+    AnalyzerFifo analyzer;          // post-EQ (output) spectrum
+    AnalyzerFifo preEqAnalyzer;     // pre-EQ (input) spectrum — for the graph's in-vs-out display
 
     // EQ-match capture: lock-free taps fed pre-EQ (source) / from sidechain (reference)
     // while capturing; averaged curves are message-thread-only state.

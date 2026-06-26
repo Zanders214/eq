@@ -39,7 +39,7 @@ inline constexpr int numFilterTypes = 9;
 
 // Fixed pool of EQ bands. Lives here (the pure header) so non-JUCE code such as
 // MatchFit can share it. Bump to expand the EQ; strip/nodes/params follow.
-inline constexpr int numBands = 6;
+inline constexpr int numBands = 24;
 
 // Deepest identical-biquad cascade the engine supports (12 dB/oct per stage, so 96 dB/oct).
 // Biquad.h aliases its maxCascade to this so the array depth and the slope math share one

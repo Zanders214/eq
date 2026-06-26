@@ -16,6 +16,11 @@ namespace ids
     inline constexpr const char* hq     = "hq";       // HQ oversampling
     inline constexpr const char* autogain = "autogain"; // loudness-matched output trim
     inline constexpr const char* matchamount = "matchamount"; // EQ-match strength 0..100%
+    inline constexpr const char* gainScale     = "gainscale";     // 0..200% overall EQ gain
+    inline constexpr const char* analyzerOn    = "analyzeron";    // analyzer display mode
+    inline constexpr const char* analyzerRange = "analyzerrange"; // analyzer vertical dB range
+    inline constexpr const char* globalBypass  = "globalbypass";  // bypass the whole EQ
+    inline constexpr const char* phaseMode     = "phasemode";     // Zero Latency / Natural / Linear
 
     // Per-band, suffixed with the band index, e.g. "band0_freq".
     inline juce::String band  (int i)               { return "band" + juce::String (i) + "_"; }
@@ -25,6 +30,7 @@ namespace ids
     inline juce::String q     (int i)               { return band (i) + "q"; }
     inline juce::String slope (int i)               { return band (i) + "slope"; }
     inline juce::String on    (int i)               { return band (i) + "on"; }
+    inline juce::String active (int i)              { return band (i) + "active"; }
     inline juce::String solo  (int i)               { return band (i) + "solo"; }
     inline juce::String channel (int i)             { return band (i) + "channel"; }
     inline juce::String dynOn     (int i)           { return band (i) + "dynon"; }
@@ -99,14 +105,20 @@ struct BandDefault { FilterType type; float freq; float gain; float q; int slope
 
 inline std::array<BandDefault, numBands> defaultBands()
 {
-    return { {
-        { FilterType::highPass,  30.0f,   0.0f, 0.71f, 24 },
-        { FilterType::bell,      95.0f,   3.2f, 0.90f, 12 },
-        { FilterType::bell,     420.0f,  -3.8f, 1.50f, 12 },
-        { FilterType::bell,    2600.0f,   2.6f, 1.10f, 12 },
-        { FilterType::highShelf, 8200.0f, 3.6f, 0.70f, 12 },
-        { FilterType::lowPass, 19000.0f,  0.0f, 0.71f, 12 },
-    } };
+    // Slots 0-5 keep the design-handoff shape (active by default). Slots 6-23 are inert
+    // pool slots: valid, in-range values (so host/pluginval see sane defaults) but silent
+    // because their `active` flag defaults false — they only come alive via addBand().
+    constexpr BandDefault inert { FilterType::bell, 1000.0f, 0.0f, 0.707f, 12 };
+    std::array<BandDefault, numBands> d {};
+    d[0] = { FilterType::highPass,  30.0f,   0.0f, 0.71f, 24 };
+    d[1] = { FilterType::bell,      95.0f,   3.2f, 0.90f, 12 };
+    d[2] = { FilterType::bell,     420.0f,  -3.8f, 1.50f, 12 };
+    d[3] = { FilterType::bell,    2600.0f,   2.6f, 1.10f, 12 };
+    d[4] = { FilterType::highShelf, 8200.0f, 3.6f, 0.70f, 12 };
+    d[5] = { FilterType::lowPass, 19000.0f,  0.0f, 0.71f, 12 };
+    for (int i = 6; i < numBands; ++i)
+        d[(size_t) i] = inert;
+    return d;
 }
 
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -145,6 +157,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
         layout.add (std::make_unique<AudioParameterBool> (
             ParameterID { ids::on (i), 1 }, g + "Enabled", true));
+
+        // Pool-slot existence flag (Pro-Q add/remove model): slots 0-5 are present by
+        // default, 6-23 are spare slots that addBand() activates. Gates the audio path
+        // ahead of `on`, so missing/old states fall back to exactly six live bands.
+        layout.add (std::make_unique<AudioParameterBool> (
+            ParameterID { ids::active (i), 1 }, g + "Active", i < 6));
 
         layout.add (std::make_unique<AudioParameterBool> (
             ParameterID { ids::solo (i), 1 }, g + "Solo", false));
@@ -199,6 +217,32 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         ParameterID { ids::matchamount, 1 }, "Match Amount",
         NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f,
         AudioParameterFloatAttributes().withLabel ("%")));
+
+    // Overall EQ gain (0..200%, 100% = unity), applied in the output stage.
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { ids::gainScale, 1 }, "Gain Scale",
+        NormalisableRange<float> (0.0f, 200.0f, 0.1f), 100.0f,
+        AudioParameterFloatAttributes().withLabel ("%")));
+
+    // Analyzer display mode (read by the graph; the engine always feeds both taps).
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { ids::analyzerOn, 1 }, "Analyzer",
+        StringArray { "Off", "Pre", "Post", "Pre + Post" }, 2));
+
+    // Analyzer vertical dB range.
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { ids::analyzerRange, 1 }, "Analyzer Range",
+        StringArray { "60 dB", "90 dB", "120 dB" }, 1));
+
+    // Whole-EQ bypass: full passthrough (no filtering, no output stage).
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { ids::globalBypass, 1 }, "Bypass", false));
+
+    // Phase mode: only Zero Latency (the minimum-phase IIR path) behaves this round;
+    // Natural / Linear are declared-but-inert until the linear-phase engine lands.
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { ids::phaseMode, 1 }, "Phase Mode",
+        StringArray { "Zero Latency", "Natural", "Linear" }, 0));
 
     return layout;
 }

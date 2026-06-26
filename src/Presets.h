@@ -69,11 +69,13 @@ inline void applyPreset (const juce::AudioProcessorValueTreeState& apvts, const 
             setReal (ids::gain (i),  bnd.gain);
             setReal (ids::q (i),     bnd.q);
             set     (ids::slope (i), apvts.getParameter (ids::slope (i))->convertTo0to1 ((float) slopeValueToIndex (bnd.slope)));
+            set     (ids::active (i), 1.0f);
             set     (ids::on (i),    1.0f);
             set     (ids::solo (i),  0.0f);
         }
         else
         {
+            set (ids::active (i), 0.0f);
             set (ids::on (i), 0.0f);
             set (ids::solo (i), 0.0f);
         }
@@ -88,18 +90,20 @@ inline bool matchesPreset (const juce::AudioProcessorValueTreeState& apvts, cons
 
     for (int i = 0; i < numBands; ++i)
     {
-        const bool on = apvts.getRawParameterValue (ids::on (i))->load() > 0.5f;
+        // `active` is the existence flag under the dynamic-pool model: a preset matches when
+        // exactly its bands are present (active) and every spare slot is inactive.
+        const bool active = apvts.getRawParameterValue (ids::active (i))->load() > 0.5f;
         if (i < (int) preset.bands.size())
         {
             const auto& bnd = preset.bands[(size_t) i];
-            if (! on) return false;
+            if (! active) return false;
             if ((int) apvts.getRawParameterValue (ids::type (i))->load() != (int) bnd.type) return false;
             if (! approx (apvts.getRawParameterValue (ids::freq (i))->load(), bnd.freq, juce::jmax (0.5f, bnd.freq * 0.01f))) return false;
             if (! approx (apvts.getRawParameterValue (ids::gain (i))->load(), bnd.gain, 0.05f)) return false;
             if (! approx (apvts.getRawParameterValue (ids::q (i))->load(), bnd.q, 0.02f)) return false;
             if (slopeIndexToValue ((int) apvts.getRawParameterValue (ids::slope (i))->load()) != bnd.slope) return false;
         }
-        else if (on)
+        else if (active)
         {
             return false;
         }

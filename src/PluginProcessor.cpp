@@ -15,9 +15,9 @@ namespace
         {
             fn (ids::type (i));  fn (ids::freq (i)); fn (ids::gain (i));
             fn (ids::q (i));     fn (ids::slope (i)); fn (ids::on (i));
-            fn (ids::solo (i));  fn (ids::channel (i));
+            fn (ids::active (i)); fn (ids::solo (i));  fn (ids::channel (i));
             fn (ids::dynOn (i)); fn (ids::dynThresh (i)); fn (ids::dynRange (i));
-            fn (ids::dynAttack (i)); fn (ids::dynRelease (i));
+            fn (ids::dynAttack (i)); fn (ids::dynRelease (i)); fn (ids::dynDir (i));
         }
         fn (ids::output); fn (ids::mode); fn (ids::hq); fn (ids::autogain); fn (ids::matchamount);
     }
@@ -38,6 +38,7 @@ ZandersEqAudioProcessor::ZandersEqAudioProcessor()
         bandParams[(size_t) i].q     = apvts.getRawParameterValue (ids::q (i));
         bandParams[(size_t) i].slope = apvts.getRawParameterValue (ids::slope (i));
         bandParams[(size_t) i].on    = apvts.getRawParameterValue (ids::on (i));
+        bandParams[(size_t) i].active = apvts.getRawParameterValue (ids::active (i));
         bandParams[(size_t) i].solo  = apvts.getRawParameterValue (ids::solo (i));
         bandParams[(size_t) i].channel = apvts.getRawParameterValue (ids::channel (i));
         bandParams[(size_t) i].dynOn    = apvts.getRawParameterValue (ids::dynOn (i));
@@ -51,6 +52,8 @@ ZandersEqAudioProcessor::ZandersEqAudioProcessor()
     modeParam     = apvts.getRawParameterValue (ids::mode);
     hqParam       = apvts.getRawParameterValue (ids::hq);
     autogainParam = apvts.getRawParameterValue (ids::autogain);
+    gainScaleParam = apvts.getRawParameterValue (ids::gainScale);
+    bypassParam    = apvts.getRawParameterValue (ids::globalBypass);
 }
 
 void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
@@ -86,7 +89,8 @@ void ZandersEqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     }
     lastMs = false;
     outputSm.reset (baseSampleRate, ramp);
-    outputSm.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
+    outputSm.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outputParam->load())
+                                       * (gainScaleParam->load() * 0.01f));
     autoGainSm.reset (baseSampleRate, 0.08);   // slower ramp so the trim doesn't pump
     autoGainSm.setCurrentAndTargetValue (1.0f);
 
@@ -182,6 +186,16 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     if (capturing.load())
         captureMatchTaps (buffer, mainBus, nSamples, nCh, scEnabled);
 
+    // Second analyzer tap: pre-EQ (input) signal, mono-summed (the graph shows input vs output).
+    pushBusToFifo (mainBus, preEqAnalyzer, nSamples, nCh);
+
+    // Whole-EQ bypass: full passthrough — no filtering, no output stage. Both taps show the input.
+    if (bypassParam->load() > 0.5f)
+    {
+        pushBusToFifo (mainBus, analyzer, nSamples, nCh);   // post tap mirrors the input
+        return;
+    }
+
     const bool hq = hqParam->load() > 0.5f;
     const double procRate = baseSampleRate * (hq ? 2.0 : 1.0);
 
@@ -203,7 +217,9 @@ void ZandersEqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         qSm  [(size_t) i].setTargetValue (bandParams[(size_t) i].q->load());
         rangeSm[(size_t) i].setTargetValue (bandParams[(size_t) i].dynRange->load());
     }
-    outputSm.setTargetValue (juce::Decibels::decibelsToGain (outputParam->load()));
+    // Output gain folds in gainScale (0..200%, 100% = unity) so it ramps click-free.
+    outputSm.setTargetValue (juce::Decibels::decibelsToGain (outputParam->load())
+                             * (gainScaleParam->load() * 0.01f));
 
     // Input level (pre-EQ), for auto-gain loudness matching.
     const bool autogain = autogainParam->load() > 0.5f;
@@ -315,9 +331,10 @@ void ZandersEqAudioProcessor::updateBandCoeffsForBlock (int len, double sr, bool
 
         const auto type   = static_cast<FilterType> ((int) bandParams[(size_t) i].type->load());
         const int  slope  = slopeIndexToValue ((int) bandParams[(size_t) i].slope->load());
+        const bool slotActive = bandParams[(size_t) i].active->load() > 0.5f;
         const bool on     = bandParams[(size_t) i].on->load() > 0.5f;
         const bool solo   = bandParams[(size_t) i].solo->load() > 0.5f;
-        const bool active = on && (! anySolo || solo);
+        const bool active = slotActive && on && (! anySolo || solo);
         const int  chMode = (int) bandParams[(size_t) i].channel->load();
         lane[(size_t) i]  = chMode;
 
@@ -469,6 +486,70 @@ void ZandersEqAudioProcessor::toggleABSlot (const juce::String& slot)
     applyParams (abStored);          // load the other slot's params
     abStored = current;
     abSlot = slot;
+}
+
+// --- Dynamic band pool (message-thread only) --------------------------------
+int ZandersEqAudioProcessor::activeBandCount() const noexcept
+{
+    int n = 0;
+    for (int i = 0; i < numBands; ++i)
+        if (bandParams[(size_t) i].active->load() > 0.5f)
+            ++n;
+    return n;
+}
+
+bool ZandersEqAudioProcessor::isBandActive (int slot) const noexcept
+{
+    if (slot < 0 || slot >= numBands)
+        return false;
+    return bandParams[(size_t) slot].active->load() > 0.5f;
+}
+
+int ZandersEqAudioProcessor::firstFreeSlot() const noexcept
+{
+    for (int i = 0; i < numBands; ++i)
+        if (bandParams[(size_t) i].active->load() <= 0.5f)
+            return i;
+    return -1;
+}
+
+int ZandersEqAudioProcessor::addBand (float freq, float gain, FilterType type)
+{
+    const int slot = firstFreeSlot();
+    if (slot < 0)
+        return -1;   // pool full
+
+    // One undoable step: place the band, mark the slot present and enabled. Param writes
+    // only — the engine pool is fixed-size, so nothing allocates on the audio thread.
+    recordUndoableEdit ([this, slot, freq, gain, type]
+    {
+        auto setReal = [this] (const juce::String& id, float real)
+        {
+            if (auto* p = apvts.getParameter (id))
+                p->setValueNotifyingHost (p->convertTo0to1 (real));
+        };
+        if (auto* p = apvts.getParameter (ids::type (slot)))
+            p->setValueNotifyingHost (p->convertTo0to1 ((float) (int) type));
+        setReal (ids::freq (slot), freq);
+        setReal (ids::gain (slot), gain);
+        if (auto* p = apvts.getParameter (ids::active (slot))) p->setValueNotifyingHost (1.0f);
+        if (auto* p = apvts.getParameter (ids::on (slot)))     p->setValueNotifyingHost (1.0f);
+    });
+
+    setSelectedBand (slot);
+    return slot;
+}
+
+void ZandersEqAudioProcessor::removeBand (int slot)
+{
+    if (slot < 0 || slot >= numBands)
+        return;
+
+    recordUndoableEdit ([this, slot]
+    {
+        if (auto* p = apvts.getParameter (ids::active (slot)))
+            p->setValueNotifyingHost (0.0f);   // clear the slot's existence flag
+    });
 }
 
 void ZandersEqAudioProcessor::beginUndoTransaction()

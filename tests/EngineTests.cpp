@@ -14,6 +14,7 @@
 // never created, so the test runs headless with no message thread or display.
 
 #include "PluginProcessor.h"
+#include "Presets.h"     // applyPreset / matchesPreset
 #include "gui/Theme.h"   // noteName()
 
 #include <cmath>
@@ -65,11 +66,13 @@ namespace
             setP (p, ids::dynRelease (i),150.0f);
             setP (p, ids::dynDir (i),    0.0f);     // Over (react above threshold)
         }
-        setP (p, ids::output,      0.0f);
-        setP (p, ids::mode,        0.0f);
-        setP (p, ids::hq,          0.0f);
-        setP (p, ids::autogain,    0.0f);
-        setP (p, ids::matchamount, 100.0f);
+        setP (p, ids::output,       0.0f);
+        setP (p, ids::mode,         0.0f);
+        setP (p, ids::hq,           0.0f);
+        setP (p, ids::autogain,     0.0f);
+        setP (p, ids::matchamount,  100.0f);
+        setP (p, ids::gainScale,    100.0f);   // unity overall gain
+        setP (p, ids::globalBypass, 0.0f);     // not bypassed
     }
 
     int numChans (ZandersEqAudioProcessor& p)
@@ -622,6 +625,209 @@ int main()
         p2.prepareToPlay (sr, blockSize);
         const double dev = maxDevVsScaledInput (p2, 1000.0, 0.25, 1.0);
         check (dev < 1.0e-5, "capture tap is passive (flat output unchanged)", dev);
+    }
+
+    // --- 15. Dynamic band pool: add / remove / counts / pool-full ----------
+    {
+        ZandersEqAudioProcessor p;
+        flatBaseline (p);
+
+        // Empty the default pool (slots 0-5 active) via the public API.
+        for (int i = 0; i < numBands; ++i) p.removeBand (i);
+        check (p.activeBandCount() == 0, "removeBand clears the pool -> 0 active", p.activeBandCount());
+        check (p.firstFreeSlot() == 0,   "firstFreeSlot == 0 when the pool is empty", p.firstFreeSlot());
+        check (! p.isBandActive (0),     "slot 0 is inactive after clear");
+
+        // Fill every slot; addBand must claim the lowest free slot each time.
+        bool inOrder = true;
+        for (int k = 0; k < numBands; ++k)
+            inOrder = inOrder && (p.addBand (1000.0f, 0.0f, FilterType::bell) == k);
+        check (inOrder,                          "addBand fills slots 0..numBands-1 in order");
+        check (p.activeBandCount() == numBands,  "pool full -> all slots active", p.activeBandCount());
+        check (p.firstFreeSlot() == -1,          "firstFreeSlot == -1 when the pool is full");
+        check (p.addBand (500.0f, 3.0f, FilterType::bell) == -1, "addBand returns -1 when full");
+        check (p.isBandActive (numBands - 1),    "the last slot is active");
+    }
+
+    // --- 15b. An inactive slot contributes no gain; activating it does -----
+    {
+        ZandersEqAudioProcessor p;
+        flatBaseline (p);
+        // Slot 6 is inactive by default. Configure a big boost but leave it inactive.
+        setP (p, ids::on (6),   1.0f);
+        setP (p, ids::type (6), (float) (int) FilterType::bell);
+        setP (p, ids::freq (6), 1000.0f);
+        setP (p, ids::gain (6), 12.0f);
+        setP (p, ids::q (6),    1.0f);
+        p.prepareToPlay (sr, blockSize);
+        const double off = runSineGainDb (p, 1000.0, 0.25);
+        check (within (off, 0.0, 0.3), "inactive slot contributes no gain", off);
+
+        setP (p, ids::active (6), 1.0f);   // bring the spare slot to life
+        const double on = runSineGainDb (p, 1000.0, 0.25);
+        check (within (on, 12.0, 0.6), "activating the slot applies its gain", on);
+    }
+
+    // --- 16. Undo / redo across a band add and a remove (one step each) ----
+    {
+        ZandersEqAudioProcessor p;
+        check (p.activeBandCount() == 6, "fresh processor has 6 active bands", p.activeBandCount());
+
+        const int added = p.addBand (2000.0f, 4.0f, FilterType::bell);
+        check (added == 6,                                     "addBand claims spare slot 6", added);
+        check (p.activeBandCount() == 7 && p.isBandActive (6), "add brings the pool to 7", p.activeBandCount());
+        check (p.canUndo(),                                    "addBand is undoable");
+        p.undo();
+        check (p.activeBandCount() == 6 && ! p.isBandActive (6), "undo removes the added band in one step", p.activeBandCount());
+        p.redo();
+        check (p.activeBandCount() == 7 && p.isBandActive (6),   "redo re-adds the band", p.activeBandCount());
+
+        p.removeBand (3);
+        check (p.activeBandCount() == 6 && ! p.isBandActive (3), "removeBand deactivates slot 3", p.activeBandCount());
+        check (p.canUndo(),                                      "removeBand is undoable");
+        p.undo();
+        check (p.activeBandCount() == 7 && p.isBandActive (3),   "undo restores the removed band in one step", p.activeBandCount());
+    }
+
+    // --- 17. A/B swap preserves `active` and the now-fixed `dyndir` --------
+    {
+        ZandersEqAudioProcessor p;
+        auto setNorm = [&] (const juce::String& id, float real)
+        {
+            if (auto* pp = p.getApvts().getParameter (id))
+                pp->setValueNotifyingHost (pp->convertTo0to1 (real));
+        };
+        auto raw = [&] (const juce::String& id) { return (double) p.getApvts().getRawParameterValue (id)->load(); };
+
+        // Slot A: activate spare band 7 and set band 0's dynamics direction to Under.
+        setNorm (ids::active (7), 1.0f);
+        setNorm (ids::dynDir (0), 1.0f);
+        check (raw (ids::active (7)) > 0.5 && raw (ids::dynDir (0)) > 0.5, "A: active(7) + dyndir(0) set");
+
+        // Switch to B (inherits A on first switch), then give B different values.
+        p.toggleABSlot ("B");
+        setNorm (ids::active (7), 0.0f);
+        setNorm (ids::dynDir (0), 0.0f);
+        check (raw (ids::active (7)) < 0.5 && raw (ids::dynDir (0)) < 0.5, "B holds its own values");
+
+        // Back to A: both must be restored (forEachParamId now enumerates them).
+        p.toggleABSlot ("A");
+        check (raw (ids::active (7)) > 0.5, "A/B round-trip preserves active(7)", raw (ids::active (7)));
+        check (raw (ids::dynDir (0)) > 0.5, "A/B round-trip preserves dyndir(0)", raw (ids::dynDir (0)));
+    }
+
+    // --- 18. Old-format (6-band) state loads to exactly 6 active bands -----
+    // Strip every `*_active` node and every band6..23 node from a full state to mimic an
+    // old session, round-trip it through setStateInformation, and confirm the defaults
+    // fill the gaps to exactly six live bands.
+    {
+        auto stripToOldFormat = [] (juce::ValueTree& state)
+        {
+            for (int c = state.getNumChildren() - 1; c >= 0; --c)
+            {
+                const auto id = state.getChild (c).getProperty ("id").toString();
+                bool drop = id.endsWith ("_active");
+                for (int b = 6; b < numBands && ! drop; ++b)
+                    if (id.startsWith (ids::band (b))) drop = true;
+                if (drop) state.removeChild (c, nullptr);
+            }
+        };
+
+        ZandersEqAudioProcessor p;
+        auto state = p.getApvts().copyState();
+        stripToOldFormat (state);
+
+        juce::MemoryBlock mb;
+        if (auto xml = state.createXml())
+            juce::AudioProcessor::copyXmlToBinary (*xml, mb);
+        p.setStateInformation (mb.getData(), (int) mb.getSize());
+
+        check (p.activeBandCount() == 6, "old session state -> exactly 6 active bands", p.activeBandCount());
+        bool lowOk = true, highOk = true;
+        for (int i = 0; i < 6; ++i)        lowOk  = lowOk  && p.isBandActive (i);
+        for (int i = 6; i < numBands; ++i) highOk = highOk && ! p.isBandActive (i);
+        check (lowOk,  "old state: bands 0-5 active");
+        check (highOk, "old state: spare slots 6-23 inactive");
+
+        // Same back-compat via the .zeqpreset / applyParams path (the hasProperty guard).
+        ZandersEqAudioProcessor p2;
+        auto preset = p2.getApvts().copyState();
+        stripToOldFormat (preset);
+        const auto tmp = juce::File::createTempFile (".zeqpreset");
+        if (auto xml = preset.createXml()) xml->writeTo (tmp);
+        check (p2.loadPresetFromFile (tmp), "old-format preset loads");
+        check (p2.activeBandCount() == 6,   "old preset -> 6 active bands (defaults fill the gaps)", p2.activeBandCount());
+        tmp.deleteFile();
+    }
+
+    // --- 19. Global bypass (full passthrough) and gainScale ----------------
+    {
+        // Bypass: even a big boosting band leaves the signal untouched.
+        ZandersEqAudioProcessor p;
+        flatBaseline (p);
+        setP (p, ids::on (0),   1.0f);
+        setP (p, ids::type (0), (float) (int) FilterType::bell);
+        setP (p, ids::freq (0), 1000.0f);
+        setP (p, ids::gain (0), 12.0f);
+        setP (p, ids::q (0),    1.0f);
+        setP (p, ids::globalBypass, 1.0f);
+        p.prepareToPlay (sr, blockSize);
+        const double dev = maxDevVsScaledInput (p, 1000.0, 0.25, 1.0);
+        check (dev < 1.0e-5, "global bypass is a clean passthrough", dev);
+    }
+    {
+        // gainScale: 50% -> -6 dB, 200% -> +6 dB (all bands off, pure output scaling).
+        ZandersEqAudioProcessor p;
+        flatBaseline (p);
+        setP (p, ids::gainScale, 50.0f);
+        p.prepareToPlay (sr, blockSize);
+        const double half = runSineGainDb (p, 1000.0, 0.25);
+        check (within (half, -6.0206, 0.2), "gainScale 50% scales output by -6 dB", half);
+
+        ZandersEqAudioProcessor p2;
+        flatBaseline (p2);
+        setP (p2, ids::gainScale, 200.0f);
+        p2.prepareToPlay (sr, blockSize);
+        const double dbl = runSineGainDb (p2, 1000.0, 0.25);
+        check (within (dbl, 6.0206, 0.2), "gainScale 200% scales output by +6 dB", dbl);
+    }
+
+    // --- 20. Presets honour the active model (covers Presets.h) ------------
+    {
+        ZandersEqAudioProcessor p;
+        auto& apvts = p.getApvts();
+        const auto& pr = presets();
+        const auto& preset = pr[1];                  // "Vocal Air" (4 bands)
+        const int used = (int) preset.bands.size();
+
+        applyPreset (apvts, preset);
+        check (p.activeBandCount() == used, "applyPreset activates exactly the preset's bands", p.activeBandCount());
+        bool flagsOk = true;
+        for (int i = 0; i < numBands; ++i)
+            flagsOk = flagsOk && ((apvts.getRawParameterValue (ids::active (i))->load() > 0.5f) == (i < used));
+        check (flagsOk,                         "applyPreset active flags match the preset band count");
+        check (matchesPreset (apvts, preset),   "matchesPreset is true right after applyPreset");
+        check (! matchesPreset (apvts, pr[0]),  "matchesPreset is false for a different preset");
+
+        // A used band turned off breaks the match (covers the !active early-out).
+        setP (p, ids::active (0), 0.0f);
+        check (! matchesPreset (apvts, preset), "matchesPreset false when a used band is inactive");
+
+        // A spare band turned on also breaks the match (covers the else-if active branch).
+        applyPreset (apvts, preset);
+        setP (p, ids::active (used), 1.0f);
+        check (! matchesPreset (apvts, preset), "matchesPreset false when a spare band is active");
+    }
+
+    // --- 21. Dynamic-band API bounds are defensive -------------------------
+    {
+        ZandersEqAudioProcessor p;
+        check (! p.isBandActive (-1),       "isBandActive(-1) is false");
+        check (! p.isBandActive (numBands), "isBandActive(numBands) is false");
+        const int before = p.activeBandCount();
+        p.removeBand (-1);                   // out-of-range: no-op, must not crash/alter state
+        p.removeBand (numBands);
+        check (p.activeBandCount() == before, "removeBand ignores out-of-range slots", p.activeBandCount());
     }
 
     std::printf ("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED",

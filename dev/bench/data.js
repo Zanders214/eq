@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782491709573,
+  "lastUpdate": 1782494517822,
   "repoUrl": "https://github.com/Zanders214/eq",
   "entries": {
     "ZandersEQ DSP": [
@@ -131,6 +131,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "DSP load HQ 2x @48k/512",
             "value": 0.481,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "152227414+Zanders214@users.noreply.github.com",
+            "name": "Dennis Zanders",
+            "username": "Zanders214"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9628ef173d9f2f45982fe46cd2e8b8148744eebc",
+          "message": "Merge pull request #17 from Zanders214/claude/proq4-band-panel-a9vmj8\n\nfeat(gui): repurpose BandEditorRail into a Pro-Q-4 floating band panel (Branch 4)",
+          "timestamp": "2026-06-26T19:19:41+02:00",
+          "tree_id": "00245fd65dd9f27daf299689acdde082ad81f972",
+          "url": "https://github.com/Zanders214/eq/commit/9628ef173d9f2f45982fe46cd2e8b8148744eebc"
+        },
+        "date": 1782494517504,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "processBlock @48k/512",
+            "value": 24558.544,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load @48k/512",
+            "value": 0.23,
+            "unit": "%"
+          },
+          {
+            "name": "processBlock HQ 2x @48k/512",
+            "value": 53755.437,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load HQ 2x @48k/512",
+            "value": 0.504,
             "unit": "%"
           }
         ]

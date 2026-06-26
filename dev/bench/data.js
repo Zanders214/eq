@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782494517822,
+  "lastUpdate": 1782494818835,
   "repoUrl": "https://github.com/Zanders214/eq",
   "entries": {
     "ZandersEQ DSP": [
@@ -175,6 +175,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "DSP load HQ 2x @48k/512",
             "value": 0.504,
+            "unit": "%"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "152227414+Zanders214@users.noreply.github.com",
+            "name": "Dennis Zanders",
+            "username": "Zanders214"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "66c06fdc497710ae035b3b7946088a2a969f6e02",
+          "message": "feat(engine): 6→24 dynamic band pool + new parameter surface (Pro-Q 4 foundation) (#16)\n\nFoundation branch: dynamic 24-slot band pool (Pro-Q add/remove model), per-band `active` flag gating the audio path, dynamic-band API (addBand/removeBand/activeBandCount/firstFreeSlot/isBandActive), second pre-EQ analyzer tap, new global params (gainScale/analyzerOn/analyzerRange/globalBypass/phaseMode), and the forEachParamId fix capturing dynDir + active for undo/A-B/presets. Old 6-band states load to exactly 6 active bands. MatchFit capped to its 6-band solver. Verified: ctest, pluginval strictness 10, RTSan, SonarCloud coverage all green.",
+          "timestamp": "2026-06-26T19:24:13+02:00",
+          "tree_id": "20abb928e7ad1f657fa41f2c1b005d7925fda526",
+          "url": "https://github.com/Zanders214/eq/commit/66c06fdc497710ae035b3b7946088a2a969f6e02"
+        },
+        "date": 1782494817918,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "processBlock @48k/512",
+            "value": 31023.616,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load @48k/512",
+            "value": 0.291,
+            "unit": "%"
+          },
+          {
+            "name": "processBlock HQ 2x @48k/512",
+            "value": 64342.707,
+            "unit": "ns/block"
+          },
+          {
+            "name": "DSP load HQ 2x @48k/512",
+            "value": 0.603,
             "unit": "%"
           }
         ]
